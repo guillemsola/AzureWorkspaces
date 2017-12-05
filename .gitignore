@@ -279,4 +279,4 @@ __pycache__/
 # End of https://www.gitignore.io/api/visualstudio
 
 # Do not upload zip as it changes in any deployment
-\AzureWorkspacesDeployment/Artifacts/Configuration.zip
+# \AzureWorkspacesDeployment/Artifacts/Configuration.zip
