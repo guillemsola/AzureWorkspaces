@@ -43,6 +43,7 @@
     <None Include="Deployment.targets">
       <Visible>False</Visible>
     </None>
+    <Content Include="Build-AzureResourceGroup.ps1" />
     <Content Include="Deploy-AzureResourceGroup.ps1" />
     <Content Include="README.md" />
     <Content Include="DSC\CreateADPDC.ps1" />
