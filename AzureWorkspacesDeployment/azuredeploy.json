@@ -1,0 +1,1156 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the administrator account of the new VM and domain"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The password for the administrator account of the new VM and domain"
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "metadata": {
+        "description": "The FQDN of the Active Directory Domain to be created"
+      }
+    },
+    "dnsPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The DNS prefix for the public IP address used by the Load Balancer"
+      }
+    },
+    "_artifactsLocation": {
+      "type": "string",
+      "metadata": {
+        "description": "The location of resources, such as templates and DSC modules, that the template depends on"
+      },
+      "defaultValue": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/active-directory-new-domain"
+    },
+    "_artifactsLocationSasToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Auto-generated token to access _artifactsLocation"
+      },
+      "defaultValue": ""
+    },
+    "_binariesLocationSasToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Auto-generated token to access installer binaries"
+      },
+      "defaultValue": ""
+    }
+  },
+  "variables": {
+    "NSGName": "WSVNET-NSG",
+    "DCVMName": "DC-01",
+    "WSFrontVMName": "WSFront",
+    "WSBackVMName": "WSBack",
+    "SQLVMName": "SQL",
+    "WSLBackVMName": "WSLBack",
+    "WSLFrontVMName": "WSLFront",
+    "virtualNetworkName": "WSVNet",
+    "virtualNetworkAddressRange": "10.0.0.0/8",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'wssa')]",
+    "DCIPAddress": "10.0.0.4",
+    "DCSubnetRef": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName')), '/subnets/', variables('DCSubnetName'))]",
+    "DMZSubnetRef": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName')), '/subnets/', variables('DMZSubnetName'))]",
+    "DCSubnetName": "DCSubnet",
+    "DCSubnetAddressPrefix": "10.0.0.0/24",
+    "DMZSubnetName": "DMZSubnet",
+    "DMZSubnetAddressPrefix": "10.10.0.0/24",
+    "DCpublicIPAddressName": "adPublicIP",
+    "DMZpublicIPAddressName": "DMZPublicIP",
+    "sqlAutopatchingDayOfWeek": "Sunday",
+    "sqlAutopatchingStartHour": "2",
+    "sqlAutopatchingWindowDuration": "60",
+    "sqlConnectivityType": "Private",
+    "sqlPortNumber": 1433,
+    "sqlStorageDisksCount": 1,
+    "sqlStorageWorkloadType": "GENERAL",
+    "sqlStorageDisksConfigurationType": "NEW",
+    "sqlStorageStartingDeviceId": 2,
+    "rServicesEnabled": "false",
+    "OuPath": "OU=Servers,DC=ws,DC=local"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('storageAccountName')]",
+      "apiVersion": "2016-01-01",
+      "tags": {
+        "displayName": "Storage"
+      },
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "Storage",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('DCpublicIPAddressName')]",
+      "apiVersion": "2016-03-30",
+      "tags": {
+        "displayName": "Public IP"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat('dc-', parameters('dnsPrefix'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('DMZpublicIPAddressName')]",
+      "apiVersion": "2016-03-30",
+      "tags": {
+        "displayName": "Public IP"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat('wsl-', parameters('dnsPrefix'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('virtualNetworkName')]",
+      "apiVersion": "2017-06-01",
+      "tags": {
+        "displayName": "WS-VNET"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('DCSubnetAddressPrefix')]",
+            "[variables('DMZSubnetAddressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('DCSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('DCSubnetAddressPrefix')]"
+            }
+          },
+          {
+            "name": "[variables('DMZSubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('DMZSubnetAddressPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('DCVMName'), '-NIC')]",
+      "apiVersion": "2016-03-30",
+      "tags": {
+        "displayName": "DC NIC"
+      },
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "[variables('DCIPAddress')]",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
+              },
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('DCVMName')]",
+      "apiVersion": "2017-03-30",
+      "tags": {
+        "displayName": "Domain Controller VM"
+      },
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('DCVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_D2_v2"
+        },
+        "osProfile": {
+          "computerName": "[variables('DCVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('DCVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "[concat(variables('DCVMName'), '-data-disk')]",
+              "caching": "None",
+              "createOption": "Empty",
+              "diskSizeGB": "32",
+              "lun": 0
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('DCVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "type": "extensions",
+          "name": "CreateADForest",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "Create AD Forest"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', variables('DCVMName'))]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.19",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/CreateADPDC.zip')]",
+                "script": "CreateADPDC.ps1",
+                "function": "CreateADPDC"
+              },
+              "configurationArguments": {
+                "DomainName": "[parameters('domainName')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {
+                "AdminCreds": {
+                  "UserName": "[parameters('adminUsername')]",
+                  "Password": "[parameters('adminPassword')]"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "name": "UpdateVNetDNS",
+      "apiVersion": "2016-02-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('DCVMName'), 'CreateADForest')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[concat(parameters('_artifactsLocation'), '/nestedtemplates/vnet-with-dns-server.json', parameters('_artifactsLocationSasToken'))]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "virtualNetworkName": {
+            "value": "[variables('virtualNetworkName')]"
+          },
+          "NSGName": {
+            "value": "[variables('NSGName')]"
+          },
+          "subnetName1": {
+            "value": "[variables('DCSubnetName')]"
+          },
+          "subnetRange1": {
+            "value": "[variables('DCSubnetAddressPrefix')]"
+          },
+          "subnetName2": {
+            "value": "[variables('DMZSubnetName')]"
+          },
+          "subnetRange2": {
+            "value": "[variables('DMZSubnetAddressPrefix')]"
+          },
+          "DNSServerAddress": {
+            "value": [
+              "[variables('DCIPAddress')]"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('WSFrontVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WS Front NIC"
+      },
+      "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.0.8",
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ],
+        "dnsSettings": {
+          "dnsServers": [
+            "[variables('DCIPAddress')]"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('WSFrontVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WS Front"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('WSFrontVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_A2"
+        },
+        "osProfile": {
+          "computerName": "[variables('WSFrontVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('WSFrontVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('WSFrontVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "[concat(variables('WSFrontVMName'), '/joindomain')]",
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "comments": "Join domain - JsonADDomainExtension",
+          "apiVersion": "2016-03-30",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSFrontVMName')]"
+          ],
+          "tags": {
+            "displayName": "Join domain"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "JsonADDomainExtension",
+            "typeHandlerVersion": "1.3",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "Name": "[parameters('domainName')]",
+              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+              "Restart": "true",
+              "Options": "3",
+              "OUPath": "[variables('OuPath')]"
+            },
+            "protectedSettings": {
+              "Password": "[parameters('adminPassword')]"
+            }
+          }
+        },
+        {
+          "type": "extensions",
+          "name": "DSCConfiguration",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "DSC Configuration"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSFrontVMName')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/joindomain')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.20",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
+                "script": "Configuration.ps1",
+                "function": "WSFront"
+              },
+              "configurationArguments": {
+                "artifactsLocation": "[parameters('_artifactsLocation')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
+                "binariesLocationSasToken": "[parameters('_binariesLocationSasToken')]"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('WSBackVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WS Back NIC"
+      },
+      "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ],
+        "dnsSettings": {
+          "dnsServers": [
+            "[variables('DCIPAddress')]"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('WSBackVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WS Back"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('WSBackVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_A2"
+        },
+        "osProfile": {
+          "computerName": "[variables('WSBackVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('WSBackVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('WSBackVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "[concat(variables('WSBackVMName'), '/joindomain')]",
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "comments": "Join domain - JsonADDomainExtension",
+          "apiVersion": "2016-03-30",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSBackVMName')]"
+          ],
+          "tags": {
+            "displayName": "Join domain"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "JsonADDomainExtension",
+            "typeHandlerVersion": "1.3",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "Name": "[parameters('domainName')]",
+              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+              "Restart": "true",
+              "Options": "3",
+              "OUPath": "[variables('OuPath')]"
+            },
+            "protectedSettings": {
+              "Password": "[parameters('adminPassword')]"
+            }
+          }
+        },
+        {
+          "type": "extensions",
+          "name": "DSCConfiguration",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "DSC Configuration"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSBackVMName')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSBackVMName'), '/extensions/joindomain')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.20",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
+                "script": "Configuration.ps1",
+                "function": "WSBack"
+              },
+              "configurationArguments": {
+                "artifactsLocation": "[parameters('_artifactsLocation')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('SQLVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "SQL NIC"
+      },
+      "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ],
+        "dnsSettings": {
+          "dnsServers": [
+            "[variables('DCIPAddress')]"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('SQLVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "SQL "
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('SQLVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_A2"
+        },
+        "osProfile": {
+          "computerName": "[variables('SQLVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftSQLServer",
+            "offer": "SQL2016SP1-WS2016",
+            "sku": "SQLDEV",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('SQLVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "sq-data-disk",
+              "caching": "None",
+              "createOption": "Empty",
+              "diskSizeGB": "32",
+              "lun": 0
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('SQLVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "[concat(variables('SQLVMName'), '/joindomain')]",
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "comments": "Join domain - JsonADDomainExtension",
+          "apiVersion": "2016-03-30",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('SQLVMName')]"
+          ],
+          "tags": {
+            "displayName": "Join domain"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "JsonADDomainExtension",
+            "typeHandlerVersion": "1.3",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "Name": "[parameters('domainName')]",
+              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+              "Restart": "true",
+              "Options": "3",
+              "OUPath": "[variables('OuPath')]"
+            },
+            "protectedSettings": {
+              "Password": "[parameters('adminPassword')]"
+            }
+          }
+        },
+        {
+          "type": "extensions",
+          "name": "DSCConfiguration",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "DSC Configuration"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('SQLVMName')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/joindomain')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.20",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
+                "script": "Configuration.ps1",
+                "function": "WSSQL"
+              },
+              "configurationArguments": {
+                "TcpPort": "[variables('sqlPortNumber')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(variables('SQLVMName'), '/SqlIaasExtension')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'))]"
+      ],
+      "tags": {
+        "displayName": "SqlServer Extension"
+      },
+      "properties": {
+        "type": "SqlIaaSAgent",
+        "publisher": "Microsoft.SqlServer.Management",
+        "typeHandlerVersion": "1.2",
+        "autoUpgradeMinorVersion": "true",
+        "settings": {
+          "AutoTelemetrySettings": {
+            "Region": "[resourceGroup().location]"
+          },
+          "AutoPatchingSettings": {
+            "PatchCategory": "WindowsMandatoryUpdates",
+            "Enable": true,
+            "DayOfWeek": "[variables('sqlAutopatchingDayOfWeek')]",
+            "MaintenanceWindowStartingHour": "[variables('sqlAutopatchingStartHour')]",
+            "MaintenanceWindowDuration": "[variables('sqlAutopatchingWindowDuration')]"
+          },
+          "KeyVaultCredentialSettings": {
+            "Enable": false,
+            "CredentialName": ""
+          },
+          "ServerConfigurationsManagementSettings": {
+            "SQLConnectivityUpdateSettings": {
+              "ConnectivityType": "[variables('sqlConnectivityType')]",
+              "Port": "[variables('sqlPortNumber')]"
+            },
+            "SQLWorkloadTypeUpdateSettings": {
+              "SQLWorkloadType": "[variables('sqlStorageWorkloadType')]"
+            },
+            "SQLStorageUpdateSettings": {
+              "DiskCount": "[variables('sqlStorageDisksCount')]",
+              "NumberOfColumns": "[variables('sqlStorageDisksCount')]",
+              "StartingDeviceID": "[variables('sqlStorageStartingDeviceId')]",
+              "DiskConfigurationType": "[variables('sqlStorageDisksConfigurationType')]"
+            },
+            "AdditionalFeaturesServerConfigurations": {
+              "IsRServicesEnabled": "[variables('rServicesEnabled')]"
+            }
+          }
+        },
+        "protectedSettings": {
+          "SQLAuthUpdateUserName": "[parameters('adminUsername')]",
+          "SQLAuthUpdatePassword": "[parameters('adminPassword')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('WSLBackVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WSL Back NIC"
+      },
+      "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ],
+        "dnsSettings": {
+          "dnsServers": [
+            "[variables('DCIPAddress')]"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('WSLBackVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WSL Back"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('WSLBackVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_A2"
+        },
+        "osProfile": {
+          "computerName": "[variables('WSLBackVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('WSLBackVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('WSLBackVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "[concat(variables('WSLBackVMName'), '/joindomain')]",
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "comments": "Join domain - JsonADDomainExtension",
+          "apiVersion": "2016-03-30",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSLBackVMName')]"
+          ],
+          "tags": {
+            "displayName": "Join domain"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "JsonADDomainExtension",
+            "typeHandlerVersion": "1.3",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "Name": "[parameters('domainName')]",
+              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+              "Restart": "true",
+              "Options": "3",
+              "OUPath": "[variables('OuPath')]"
+            },
+            "protectedSettings": {
+              "Password": "[parameters('adminPassword')]"
+            }
+          }
+        },
+        {
+          "type": "extensions",
+          "name": "DSCConfiguration",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "DSC Configuration"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSLBackVMName')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSLBackVMName'), '/extensions/joindomain')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.20",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
+                "script": "Configuration.ps1",
+                "function": "WSLBack"
+              },
+              "configurationArguments": {
+                "artifactsLocation": "[parameters('_artifactsLocation')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('WSLFrontVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WSL Front NIC"
+      },
+      "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('DMZpublicIPAddressName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.10.0.10",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DMZpublicIPAddressName'))]"
+              },
+              "subnet": {
+                "id": "[variables('DMZSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('WSLFrontVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WSL Front"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('WSLFrontVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_A2"
+        },
+        "osProfile": {
+          "computerName": "[variables('WSLFrontVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('WSLFrontVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces/', concat(variables('WSLFrontVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "type": "extensions",
+          "name": "DSCConfiguration",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "DSC Configuration"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('WSLFrontVMName')]",
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.20",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
+                "script": "Configuration.ps1",
+                "function": "WSLFront"
+              },
+              "configurationArguments": {
+                "artifactsLocation": "[parameters('_artifactsLocation')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('NSGName')]",
+      "apiVersion": "2016-03-30",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "WSVNET-NSG"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "enable_dns_rule",
+            "properties": {
+              "description": "Internal DNS traffic (port 53) is allowed",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "53",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[variables('DCIPAddress')]",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "enable_rdp_rule",
+            "properties": {
+              "description": "RDP traffic (port 3389) from the Internet to any VM is allowed",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "enable_ssh_rule",
+            "properties": {
+              "description": "SSH from the Internet to any VM is allowed",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 115,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "enable_web_rule",
+            "properties": {
+              "description": "Enable Internet to [variables('WSLFront')]",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "10.10.0.10",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "deny_internet_rule",
+            "properties": {
+              "description": "Isolate the [variables('VNetName')] VNet from the Internet",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "VirtualNetwork",
+              "access": "Deny",
+              "priority": 140,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "deny_frontend_rule",
+            "properties": {
+              "description": "Isolate the [variables('DMZSubnetAddressPrefix')] subnet from the [variables('DCSubnetAddressPrefix')] subnet",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[variables('DMZSubnetAddressPrefix')]",
+              "destinationAddressPrefix": "[variables('DCSubnetAddressPrefix')]",
+              "access": "Deny",
+              "priority": 150,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    }
+
+  ],
+  "outputs": {}
+}
