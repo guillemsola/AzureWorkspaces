@@ -27,12 +27,12 @@
       },
       "defaultValue": "10.0.0.0/24"
     },
-    "subnetName2": {
-      "type": "string",
-      "metadata": {
-        "description": "The name of the subnet created in the new VNET"
-      }
-    },
+    //"subnetName2": {
+    //  "type": "string",
+    //  "metadata": {
+    //    "description": "The name of the subnet created in the new VNET"
+    //  }
+    //},
     "subnetRange2": {
       "type": "string",
       "metadata": {
@@ -72,16 +72,16 @@
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('NSGName'))]"
               }
             }
-          },
-          {
-            "name": "[parameters('subnetName2')]",
-            "properties": {
-              "addressPrefix": "[parameters('subnetRange2')]",
-              "networkSecurityGroup": {
-                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('NSGName'))]"
-              }
-            }
           }
+          //{
+          //  "name": "[parameters('subnetName2')]",
+          //  "properties": {
+          //    "addressPrefix": "[parameters('subnetRange2')]",
+          //    "networkSecurityGroup": {
+          //      "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('NSGName'))]"
+          //    }
+          //  }
+          //}
         ]
       }
     }

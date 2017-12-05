@@ -31,7 +31,7 @@
       "metadata": {
         "description": "The location of resources, such as templates and DSC modules, that the template depends on"
       },
-      "defaultValue": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/active-directory-new-domain"
+      "defaultValue": "https://raw.githubusercontent.com/guillemsola/AzureWorkspaces/master/AzureWorkspacesDeployment/Artifacts"
     },
     "_artifactsLocationSasToken": {
       "type": "securestring",
@@ -67,6 +67,7 @@
     "DMZSubnetName": "DMZSubnet",
     "DMZSubnetAddressPrefix": "10.10.0.0/24",
     "DCpublicIPAddressName": "adPublicIP",
+    "WSPpublicIPAddressName": "wspPublicIP",
     "DMZpublicIPAddressName": "DMZPublicIP",
     "sqlAutopatchingDayOfWeek": "Sunday",
     "sqlAutopatchingStartHour": "2",
@@ -97,7 +98,7 @@
     },
     {
       "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[variables('DCpublicIPAddressName')]",
+      "name": "[variables('WSPpublicIPAddressName')]",
       "apiVersion": "2016-03-30",
       "tags": {
         "displayName": "Public IP"
@@ -106,13 +107,14 @@
       "properties": {
         "publicIPAllocationMethod": "Dynamic",
         "dnsSettings": {
-          "domainNameLabel": "[concat('dc-', parameters('dnsPrefix'))]"
+          "domainNameLabel": "[parameters('dnsPrefix')]"
         }
       }
     },
     {
       "type": "Microsoft.Network/publicIPAddresses",
       "name": "[variables('DMZpublicIPAddressName')]",
+      "condition":  "[equals('True', 'False')]",
       "apiVersion": "2016-03-30",
       "tags": {
         "displayName": "Public IP"
@@ -136,8 +138,8 @@
       "properties": {
         "addressSpace": {
           "addressPrefixes": [
-            "[variables('DCSubnetAddressPrefix')]",
-            "[variables('DMZSubnetAddressPrefix')]"
+            "[variables('DCSubnetAddressPrefix')]"
+            //"[variables('DMZSubnetAddressPrefix')]"
           ]
         },
         "subnets": [
@@ -146,13 +148,13 @@
             "properties": {
               "addressPrefix": "[variables('DCSubnetAddressPrefix')]"
             }
-          },
-          {
-            "name": "[variables('DMZSubnetName')]",
-            "properties": {
-              "addressPrefix": "[variables('DMZSubnetAddressPrefix')]"
-            }
           }
+          //{
+          //  "name": "[variables('DMZSubnetName')]",
+          //  "properties": {
+          //    "addressPrefix": "[variables('DMZSubnetAddressPrefix')]"
+          //  }
+          //}
         ]
       }
     },
@@ -165,8 +167,8 @@
       },
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
-        "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
+        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
+        //"[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
       ],
       "properties": {
         "ipConfigurations": [
@@ -304,12 +306,12 @@
           "subnetRange1": {
             "value": "[variables('DCSubnetAddressPrefix')]"
           },
-          "subnetName2": {
-            "value": "[variables('DMZSubnetName')]"
-          },
-          "subnetRange2": {
-            "value": "[variables('DMZSubnetAddressPrefix')]"
-          },
+          //"subnetName2": {
+          //  "value": "[variables('DMZSubnetName')]"
+          //},
+          //"subnetRange2": {
+          //  "value": "[variables('DMZSubnetAddressPrefix')]"
+          //},
           "DNSServerAddress": {
             "value": [
               "[variables('DCIPAddress')]"
@@ -327,7 +329,8 @@
         "displayName": "WS Front NIC"
       },
       "dependsOn": [
-        "Microsoft.Resources/deployments/UpdateVNetDNS"
+        "Microsoft.Resources/deployments/UpdateVNetDNS",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName'))]"
       ],
       "properties": {
         "ipConfigurations": [
@@ -336,6 +339,9 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "10.0.0.8",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName'))]"
+              },
               "subnet": {
                 "id": "[variables('DCSubnetRef')]"
               }
@@ -806,6 +812,7 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
+      "condition":  "[equals('True', 'False')]",
       "name": "[concat(variables('WSLBackVMName'), '-NIC')]",
       "location": "[resourceGroup().location]",
       "tags": {
@@ -837,6 +844,7 @@
       "apiVersion": "2017-03-30",
       "type": "Microsoft.Compute/virtualMachines",
       "name": "[variables('WSLBackVMName')]",
+      "condition": "[equals('True', 'False')]",
       "location": "[resourceGroup().location]",
       "tags": {
         "displayName": "WSL Back"
@@ -880,6 +888,7 @@
         {
           "name": "[concat(variables('WSLBackVMName'), '/joindomain')]",
           "type": "Microsoft.Compute/virtualMachines/extensions",
+          "condition": "[equals('True', 'False')]",
           "comments": "Join domain - JsonADDomainExtension",
           "apiVersion": "2016-03-30",
           "location": "[resourceGroup().location]",
@@ -909,6 +918,7 @@
         {
           "type": "extensions",
           "name": "DSCConfiguration",
+          "condition": "[equals('True', 'False')]",
           "apiVersion": "2015-06-15",
           "tags": {
             "displayName": "DSC Configuration"
@@ -947,6 +957,7 @@
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
       "name": "[concat(variables('WSLFrontVMName'), '-NIC')]",
+      "condition": "[equals('True', 'False')]",
       "location": "[resourceGroup().location]",
       "tags": {
         "displayName": "WSL Front NIC"
@@ -976,6 +987,7 @@
     {
       "apiVersion": "2017-03-30",
       "type": "Microsoft.Compute/virtualMachines",
+      "condition": "[equals('True', 'False')]",
       "name": "[variables('WSLFrontVMName')]",
       "location": "[resourceGroup().location]",
       "tags": {
@@ -1020,13 +1032,14 @@
         {
           "type": "extensions",
           "name": "DSCConfiguration",
+          "condition": "[equals('True', 'False')]",
           "apiVersion": "2015-06-15",
           "tags": {
             "displayName": "DSC Configuration"
           },
           "location": "[resourceGroup().location]",
           "dependsOn": [
-            "[variables('WSLFrontVMName')]",
+            "[variables('WSLFrontVMName')]"
           ],
           "properties": {
             "publisher": "Microsoft.Powershell",
@@ -1133,20 +1146,20 @@
               "direction": "Inbound"
             }
           },
-          {
-            "name": "deny_frontend_rule",
-            "properties": {
-              "description": "Isolate the [variables('DMZSubnetAddressPrefix')] subnet from the [variables('DCSubnetAddressPrefix')] subnet",
-              "protocol": "*",
-              "sourcePortRange": "*",
-              "destinationPortRange": "*",
-              "sourceAddressPrefix": "[variables('DMZSubnetAddressPrefix')]",
-              "destinationAddressPrefix": "[variables('DCSubnetAddressPrefix')]",
-              "access": "Deny",
-              "priority": 150,
-              "direction": "Inbound"
-            }
-          }
+          //{
+          //  "name": "deny_frontend_rule",
+          //  "properties": {
+          //    "description": "Isolate the [variables('DMZSubnetAddressPrefix')] subnet from the [variables('DCSubnetAddressPrefix')] subnet",
+          //    "protocol": "*",
+          //    "sourcePortRange": "*",
+          //    "destinationPortRange": "*",
+          //    "sourceAddressPrefix": "[variables('DMZSubnetAddressPrefix')]",
+          //    "destinationAddressPrefix": "[variables('DCSubnetAddressPrefix')]",
+          //    "access": "Deny",
+          //    "priority": 150,
+          //    "direction": "Inbound"
+          //  }
+          //}
         ]
       }
     }
