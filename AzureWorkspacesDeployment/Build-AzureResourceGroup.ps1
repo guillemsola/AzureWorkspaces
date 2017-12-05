@@ -58,3 +58,5 @@ New-AzureRmResourceGroup -Name $ResourceGroupName -Location $ResourceGroupLocati
     else {
         Write-Output '', 'Template is valid.'
     }
+
+Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
