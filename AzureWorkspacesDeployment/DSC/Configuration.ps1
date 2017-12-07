@@ -3,9 +3,18 @@
 #
 
 $InstallFolder = "C:\Install"
-$BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications/Artifactory"
+$BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications"
 $BinariesVersion = "master"
 $NetworkService  = "NT AUTHORITY\NETWORK SERVICE"
+
+$confData = @{
+    AllNodes = @(
+        @{
+            NodeName = 'localhost'
+            PSDscAllowPlainTextPassword = $true
+        }
+    )
+}
 
 configuration Common 
 { 
@@ -16,11 +25,10 @@ configuration Common
 		RebootNodeIfNeeded = $true
 	}
 
-	Service ModulesInstaller {
+	<#Service ModulesInstaller {
 		Name = "TrustedInstaller"
 		DisplayName = "Windows Modules Installer"
 		StartupType = "Manual"
-	#	State = "Stopped"
 	}
 
 	Service WindowsUpdate {
@@ -51,7 +59,7 @@ configuration Common
 		ValueName = "NoAutoUpdate"
 		ValueData = 1
 		DependsOn = "[Registry]WindowsUpdateAU"
-	}
+	}#>
 
 	# http://techibee.com/sysadmins/disable-server-manager-startup-from-user-login-using-registry-and-group-policies/2076
 	Registry DoNotOpenServerManagerAtLogon {
@@ -59,7 +67,6 @@ configuration Common
 		Key = "HKLM:\SOFTWARE\Microsoft\ServerManager"
 		ValueName = "DoNotOpenServerManagerAtLogon"
 		ValueData = 1
-		DependsOn = "[Registry]NoAutoUpdate"
 	}
 }
 
@@ -111,6 +118,7 @@ Configuration DevTools
 		Name = @(
 			"GoogleChrome"
 			"notepadplusplus.install"
+			"putty"
 		)
 		DependsOn = "[cChocoInstaller]installChoco"
 		Ensure = "Present"
@@ -160,6 +168,8 @@ Configuration WSFront
 	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
 	$iisCert = Join-Path -Path $InstallFolder -ChildPath "ws.local.pfx"
 	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
+	$citrixStorefrontExe = "CitrixStoreFront-x64.exe"
+	$citrixStoreFrontPath = Join-Path -Path $InstallFolder -ChildPath $citrixStorefrontExe
 
 	#DependensOn = '[WindowsFeature]WslDependencies'
 
@@ -171,8 +181,13 @@ Configuration WSFront
 		}
 
 		xRemoteFile Workspace {
-			Uri = "$BinariesLocation/Workspace-$BinariesVersion.zip$binariesLocationSasToken"
+			Uri = "$BinariesLocation/Artifactory/Workspace-$BinariesVersion.zip$binariesLocationSasToken"
 			DestinationPath = $wsinstaller
+		}
+
+		xRemoteFile CitrixStorefront {
+			Uri = "$BinariesLocation/prerequisites/$citrixStorefrontExe$binariesLocationSasToken"
+			DestinationPath = $citrixStoreFrontPath
 		}
 
 		Archive UnzipWorkspace {
@@ -206,20 +221,84 @@ Configuration WSFront
 			DependsOn   = "[DevTools]NestedDevTools"
 		}
 
+		cChocoPackageInstaller nodejs
+		{
+			Name = "nodejs.install"
+			Ensure = "Present"
+			DependsOn   = "[cChocoPackageInstaller]vcredist2013"
+		}
+
 		xRemoteFile IISCertFile {
 			Uri = "$artifactsLocation/ws.local.pfx$artifactsLocationSasToken"
 			DestinationPath = $iisCert
 		}
 
 		xPfxImport IISCert
-       {
-		   Thumbprint = "C41F7E2B6971DC66BA86722038AD660CA64D177E"
-           Path       = $iisCert
-           Location   = 'LocalMachine'
-           Store      = 'WebHosting'
-           #Credential = New-Object -TypeName pscredential -ArgumentList $NetworkService, (new-object System.Security.SecureString)
-           DependsOn  = '[xRemoteFile]IISCertFile'
-       }
+		{
+			Thumbprint = "C41F7E2B6971DC66BA86722038AD660CA64D177E"
+			Path       = $iisCert
+			Location   = 'LocalMachine'
+			Store      = 'WebHosting'
+			#Credential = New-Object -TypeName pscredential -ArgumentList $NetworkService, (new-object System.Security.SecureString)
+			DependsOn  = '[xRemoteFile]IISCertFile'
+		}
+
+		
+		Script InstallCitrixStoreFront
+		{
+			SetScript = 
+			{
+				$res = Start-Process -FilePath $using:citrixStoreFrontPath -ArgumentList '-silent' -Wait -ErrorAction Stop -PassThru
+
+				if($res.ExitCode -gt 0) {
+					throw "Error installing Citrix Storefront"
+				}
+			}
+			TestScript = 
+			{
+				$installed = Get-WmiObject Win32_Product | Where-Object { $_.Vendor -like "Citrix*" } | Select-Object -ExpandProperty Name
+
+				($installed -contains "Citrix StoreFront") -and ($installed -contains "Citrix Telemetry Service - x64")
+			}
+			GetScript = 
+			{
+				$version = Get-WmiObject Win32_Product | Where-Object { $_.Name -like "Citrix StoreFront" } | Select-Object -ExpandProperty Version
+
+				return @{ Result = "$version" }
+			}
+			DependsOn = "[xRemoteFile]CitrixStorefront"
+		}
+
+		$wsInstallerExe = Join-Path -Path $InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
+		
+		Script InstallWorkspaces
+		{
+			SetScript = 
+			{
+				$res = Start-Process -FilePath $using:wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
+
+				if($res.ExitCode -gt 0) {
+					throw "Error installing Citrix Storefront"
+				}
+			}
+			TestScript = 
+			{
+				If (Test-Path -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption") {
+					$installed = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption' -ErrorAction SilentlyContinue
+					($installed.DisplayName -contains "ASG CloudRobot Encryption")
+				}
+				Else {
+					$False
+				}
+			}
+			GetScript = 
+			{
+				$version = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption').Version
+
+				return @{ Result = "$version" }
+			}
+			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs")
+		}
 	}
 }
 
@@ -229,10 +308,14 @@ Configuration WSBack
 		[Parameter(Mandatory)]
 		[string] $artifactsLocation,
 		[Parameter(Mandatory)]
-		[string] $artifactsLocationSasToken
+		[string] $artifactsLocationSasToken,
+		[Parameter(Mandatory)]
+		[string] $binariesLocationSasToken
 	)
 
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration
+
+	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
 
 	Node localhost
 	{
@@ -241,9 +324,58 @@ Configuration WSBack
 			DestinationPath = $rootCA = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
 		}
 
+		WindowsFeatureSet  WorkspaceDependencies {
+			Name = @("NET-Framework-Features", "NET-Framework-45-Core")
+			Ensure = "Present"
+			IncludeAllSubFeature = $True
+		}
+
+		xRemoteFile Workspace {
+			Uri = "$BinariesLocation/Artifactory/Workspace-$BinariesVersion.zip$binariesLocationSasToken"
+			DestinationPath = $wsinstaller
+		}
+
+		Archive UnzipWorkspace {
+			Destination = $InstallFolder
+			Path = $wsinstaller
+			Force = $True
+			DependsOn = "[xRemoteFile]Workspace"
+		}
+
 		AddRootCa NestedRootCA {
 			artifactsLocation = $artifactsLocation
 			artifactsLocationSasToken = $artifactsLocationSasToken
+		}
+
+		$wsInstallerExe = Join-Path -Path $InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
+
+		Script InstallWorkspaces
+		{
+			SetScript = 
+			{
+				$res = Start-Process -FilePath $using:wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
+
+				if($res.ExitCode -gt 0) {
+					throw "Error installing Citrix Storefront"
+				}
+			}
+			TestScript = 
+			{
+				If (Test-Path -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption") {
+					$installed = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption' -ErrorAction SilentlyContinue
+					($installed.DisplayName -contains "ASG CloudRobot Encryption")
+				}
+				Else {
+					$False
+				}
+			}
+			GetScript = 
+			{
+				$version = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption').Version
+
+				return @{ Result = "$version" }
+			}
+			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies")
 		}
 
 		Common NestedCommon {}

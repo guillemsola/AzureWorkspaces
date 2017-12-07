@@ -43,9 +43,22 @@
     "_binariesLocationSasToken": {
       "type": "securestring",
       "metadata": {
-        "description": "Auto-generated token to access installer binaries"
+        "description": "Token to access installer binaries that has been given to you. Beware that token has a date of expiry."
       },
       "defaultValue": ""
+    },
+    "VMSize": {
+      "type": "string",
+      "allowedValues": [
+        "Standard_F2s",
+        "Standard_F4s",
+        "Standard_A2",
+        "Standard_A4"
+      ],
+      "metadata": {
+        "description": "The size that the virtual machines will use by default."
+      },
+      "defaultValue": "Standard_F2s"
     }
   },
   "variables": {
@@ -56,6 +69,7 @@
     "SQLVMName": "SQL",
     "WSLBackVMName": "WSLBack",
     "WSLFrontVMName": "WSLFront",
+    "RabbitMQVMName": "Rabbit",
     "virtualNetworkName": "WSVNet",
     "virtualNetworkAddressRange": "10.0.0.0/8",
     "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'wssa')]",
@@ -101,7 +115,7 @@
       "name": "[variables('WSPpublicIPAddressName')]",
       "apiVersion": "2016-03-30",
       "tags": {
-        "displayName": "Public IP"
+        "displayName": "Portal Public IP"
       },
       "location": "[resourceGroup().location]",
       "properties": {
@@ -114,10 +128,10 @@
     {
       "type": "Microsoft.Network/publicIPAddresses",
       "name": "[variables('DMZpublicIPAddressName')]",
-      "condition":  "[equals('True', 'False')]",
+      "condition": "[equals('True', 'False')]",
       "apiVersion": "2016-03-30",
       "tags": {
-        "displayName": "Public IP"
+        "displayName": "WSL Public IP"
       },
       "location": "[resourceGroup().location]",
       "properties": {
@@ -177,9 +191,9 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "[variables('DCIPAddress')]",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
-              },
+              //"publicIPAddress": {
+              //  "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
+              //},
               "subnet": {
                 "id": "[variables('DCSubnetRef')]"
               }
@@ -453,6 +467,7 @@
               },
               "configurationArguments": {
                 "artifactsLocation": "[parameters('_artifactsLocation')]"
+                //"ConfigurationData": "$confData"
               }
             },
             "protectedSettings": {
@@ -599,7 +614,8 @@
             "protectedSettings": {
               "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
               "configurationArguments": {
-                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]"
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
+                "binariesLocationSasToken": "[parameters('_binariesLocationSasToken')]"
               }
             }
           }
@@ -812,7 +828,7 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
-      "condition":  "[equals('True', 'False')]",
+      "condition": "[equals('True', 'False')]",
       "name": "[concat(variables('WSLBackVMName'), '-NIC')]",
       "location": "[resourceGroup().location]",
       "tags": {
@@ -1145,7 +1161,7 @@
               "priority": 140,
               "direction": "Inbound"
             }
-          },
+          }
           //{
           //  "name": "deny_frontend_rule",
           //  "properties": {
@@ -1161,6 +1177,101 @@
           //  }
           //}
         ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('RabbitMQVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+      ],
+      "tags": {
+        "displayName": "RabbitMQ NIC"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.0.200",
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('RabbitMQVMName')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-04-30-preview",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('RabbitMQVMName'), '-NIC')]"
+      ],
+      "tags": {
+        "displayName": "RabbitMQ"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_A1"
+        },
+        "osProfile": {
+          "computerName": "[variables('RabbitMQVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "16.04-LTS",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('RabbitMQVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('RabbitMQVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(variables('RabbitMQVMName'), '/', 'InstallRabbit')]",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[variables('RabbitMQVMName')]"
+      ],
+      "tags": {
+        "displayName": "Install Rabbit"
+      },
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.0",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[concat(parameters('_artifactsLocation'), '/rabbit.sh', parameters('_artifactsLocationSasToken'))]"
+          ],
+          "commandToExecute": "sh rabbit.sh"
+        },
+        "protectedSettings": {
+        }
       }
     }
 

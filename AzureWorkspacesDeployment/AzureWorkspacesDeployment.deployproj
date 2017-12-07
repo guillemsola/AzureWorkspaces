@@ -29,6 +29,7 @@
     <Content Include="azuredeploy.parameters.json" />
     <Content Include="azuredeploy.json" />
     <None Include="Artifacts\CreateADPDC.zip" />
+    <None Include="Artifacts\rabbit.sh" />
     <None Include="Artifacts\wsback\WSMISettings.json" />
     <None Include="Artifacts\ws.local.pfx" />
     <None Include="Artifacts\wsfront\WSMISettings.json" />

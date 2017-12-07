@@ -2,7 +2,7 @@
 
 Param(
     [string] [Parameter(Mandatory=$true)] $ResourceGroupLocation,
-    [string] $ResourceGroupName = 'WorkspaceBenchmark',
+    [string] $ResourceGroupName = 'WorkspaceMarketPlace',
     [switch] $UploadArtifacts,
     [string] $StorageAccountName,
     [string] $StorageContainerName = $ResourceGroupName.ToLowerInvariant() + '-stageartifacts',
@@ -50,7 +50,7 @@ if ($UploadArtifacts) {
 	#$tokenBinaries = (Get-AzureStorageShare -Name host-applications -Context $ctx | New-AzureStorageShareSASToken -Permission "r" -Context $ctx -ExpiryTime (Get-Date).AddDays(30))
 	#$OptionalParameters["_binariesLocationSasToken"] = ConvertTo-SecureString -AsPlainText -Force $tokenBinaries
 	$OptionalParameters[$BinariesLocationSasToken] = $JsonParameters | Select -Expand $BinariesLocationSasToken -ErrorAction Ignore | Select -Expand 'value' -ErrorAction Ignore
-	$OptionalParameters[$BinariesLocationSasToken] = ConvertTo-SecureString -AsPlainText -Force "?sv=2016-05-31&sr=s&sig=Su0alZ%2BgY05kiZjC7x4dSRfTddVVEeFiD4uVneVZaec%3D&se=2017-12-03T16%3A43%3A45Z&sp=r"
+	$OptionalParameters[$BinariesLocationSasToken] = ConvertTo-SecureString -AsPlainText -Force "?sv=2017-04-17&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-03-30T06:50:02Z&st=2017-12-03T22:50:02Z&spr=https&sig=zRy104QGozuILwY5S5gEifN1RMd6%2BBC3ymjhWTcboas%3D"
 
     # Create DSC configuration archive
     if (Test-Path $DSCSourceFolder) {
@@ -90,9 +90,9 @@ if ($UploadArtifacts) {
             -Container $StorageContainerName -Context $StorageAccount.Context -Force -Verbose
     }
 
-    # Generate a 4 hour SAS token for the artifacts location if one was not provided in the parameters file
+    # Generate SAS token for the artifacts location if one was not provided in the parameters file
     if ($OptionalParameters[$ArtifactsLocationSasTokenName] -eq $null) {
-		$token = (New-AzureStorageContainerSASToken -Container $StorageContainerName -Context $StorageAccount.Context -Permission r -ExpiryTime (Get-Date).AddHours(4))
+		$token = (New-AzureStorageContainerSASToken -Container $StorageContainerName -Context $StorageAccount.Context -Permission r -ExpiryTime (Get-Date).AddHours(12))
 		Write-Output "Download from: $($OptionalParameters[$ArtifactsLocationName]) with token: $token"
         $OptionalParameters[$ArtifactsLocationSasTokenName] = ConvertTo-SecureString -AsPlainText -Force $token
     }
