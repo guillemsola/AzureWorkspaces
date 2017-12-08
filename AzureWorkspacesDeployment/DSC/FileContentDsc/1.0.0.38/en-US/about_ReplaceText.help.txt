@@ -1,0 +1,125 @@
+﻿.NAME
+    ReplaceText
+
+# Description
+    
+    The resource is used to replace strings matching a regular expression in a
+    text file.
+    
+    It can be used to replace strings matched with a regular expression with
+    either a text string or a secret which is provided in the password of a
+    credential object.
+    
+.PARAMETER Path
+    Key - String
+    The path to the text file to replace the string in.
+
+.PARAMETER Search
+    Key - String
+    The RegEx string to use to search the text file.
+
+.PARAMETER Type
+    Write - String
+    Allowed values: Text,  Secret
+    Specifies the value type to use as the replacement string. Defaults to 'Text'.
+
+.PARAMETER Text
+    Write - String
+    The text to replace the text identified by the RegEx. Only used when Type is set to 'Text'.
+
+.PARAMETER Secret
+    write - String
+    The secret text to replace the text identified by the RegEx. Only used when Type is set to 'Secret'.
+
+
+    .EXAMPLE
+    Set all occrurances of the string `%appname%` to be Awesome App`
+    in the file `c:\inetpub\wwwroot\default.htm`.
+
+Configuration Example
+{
+    param
+    (
+        [Parameter()]
+        [System.String[]]
+        $NodeName = 'localhost'
+    )
+
+    Import-DSCResource -ModuleName FileContentDsc
+
+    Node $NodeName
+    {
+        ReplaceText SetText
+        {
+            Path   = 'c:\inetpub\wwwroot\default.htm'
+            Search = '%appname%'
+            Type   = 'Text'
+            Text   = 'Awesome App'
+        }
+    }
+}
+
+
+    .EXAMPLE
+    Set all occrurances of a string matching the regular expression 
+    `<img src=['``"][a-zA-Z0-9.]*['``"]>` with the text `<img src="imgs/placeholder.jpg">`
+    in the file `c:\inetpub\wwwroot\default.htm`
+
+Configuration Example
+{
+    param
+    (
+        [Parameter()]
+        [System.String[]]
+        $NodeName = 'localhost'
+    )
+
+    Import-DSCResource -ModuleName FileContentDsc
+
+    Node $NodeName
+    {
+        ReplaceText SetTextWithRegex
+        {
+            Path   = 'c:\inetpub\wwwroot\default.htm'
+            Search = "<img src=['`"][a-zA-Z0-9.]*['`"]>"
+            Type   = 'Text'
+            Text   = '<img src="imgs/placeholder.jpg">'
+        }
+    }
+}
+
+
+    .EXAMPLE
+    Set all occrurances of the string `%secret%` to be the value in
+    the password set in the parameter $Secret PSCredential object
+    in the file `c:\inetpub\wwwroot\default.htm`.
+
+Configuration Example
+{
+    param
+    (
+        [Parameter()]
+        [System.String[]]
+        $NodeName = 'localhost',
+
+        [Parameter()]
+        [ValidateNotNullorEmpty()]
+        [PSCredential]
+        $Secret
+    )
+
+    Import-DSCResource -ModuleName FileContentDsc
+
+    Node $NodeName
+    {
+        ReplaceText SetSecretText
+        {
+            Path   = 'c:\inetpub\wwwroot\default.htm'
+            Search = '%secret%'
+            Type   = 'Secret'
+            Secret = $Secret
+        }
+    }
+}
+
+

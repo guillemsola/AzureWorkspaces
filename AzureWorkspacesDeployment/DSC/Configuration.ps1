@@ -161,23 +161,39 @@ Configuration WSFront
 		[Parameter(Mandatory)]
 		[string] $artifactsLocationSasToken,
 		[Parameter(Mandatory)]
-		[string] $binariesLocationSasToken
+		[string] $binariesLocationSasToken,
+		[string] $user,
+		[string] $pwd
 	)
 
-	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco, xCertificate
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco, xCertificate, FileContentDSC
 	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
 	$iisCert = Join-Path -Path $InstallFolder -ChildPath "ws.local.pfx"
 	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
 	$citrixStorefrontExe = "CitrixStoreFront-x64.exe"
 	$citrixStoreFrontPath = Join-Path -Path $InstallFolder -ChildPath $citrixStorefrontExe
 
-	#DependensOn = '[WindowsFeature]WslDependencies'
-
 	Node localhost
 	{
 		xRemoteFile ConfigJson {
 			Uri = "$artifactsLocation/wsfront/WSMISettings.json$artifactsLocationSasToken"
 			DestinationPath = $wsjson
+		}
+
+		ReplaceText replacePassword {
+			Path   = $wsjson
+            Search = '%password%'
+            Type   = 'Text'
+            Text   = $pwd
+			DependsOn = "[xRemoteFile]ConfigJson"
+		}
+
+		ReplaceText replaceUser {
+			Path   = $wsjson
+            Search = '%user%'
+            Type   = 'Text'
+            Text   = $user
+			DependsOn = "[ReplaceText]replacePassword"
 		}
 
 		xRemoteFile Workspace {
@@ -242,13 +258,12 @@ Configuration WSFront
 			#Credential = New-Object -TypeName pscredential -ArgumentList $NetworkService, (new-object System.Security.SecureString)
 			DependsOn  = '[xRemoteFile]IISCertFile'
 		}
-
 		
 		Script InstallCitrixStoreFront
 		{
 			SetScript = 
 			{
-				$res = Start-Process -FilePath $using:citrixStoreFrontPath -ArgumentList '-silent' -Wait -ErrorAction Stop -PassThru
+				$res = Start-Process -FilePath $using:citrixStoreFrontPath -ArgumentList '-silent' -Wait -PassThru
 
 				if($res.ExitCode -gt 0) {
 					throw "Error installing Citrix Storefront"
@@ -297,7 +312,7 @@ Configuration WSFront
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs")
+			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs", "[ReplaceText]replaceUser")
 		}
 	}
 }
@@ -310,18 +325,37 @@ Configuration WSBack
 		[Parameter(Mandatory)]
 		[string] $artifactsLocationSasToken,
 		[Parameter(Mandatory)]
-		[string] $binariesLocationSasToken
+		[string] $binariesLocationSasToken,
+		[string] $user,
+		[string] $pwd
 	)
 
-	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, FileContentDSC
 
 	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
+	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
 
 	Node localhost
 	{
 		xRemoteFile ConfigJson {
 			Uri = "$artifactsLocation/wsback/WSMISettings.json$artifactsLocationSasToken"
-			DestinationPath = $rootCA = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
+			DestinationPath = $wsjson
+		}
+
+		ReplaceText replacePassword {
+			Path   = $wsjson
+            Search = '%password%'
+            Type   = 'Text'
+            Text   = $pwd
+			DependsOn = "[xRemoteFile]ConfigJson"
+		}
+
+		ReplaceText replaceUser {
+			Path   = $wsjson
+            Search = '%user%'
+            Type   = 'Text'
+            Text   = $user
+			DependsOn = "[ReplaceText]replacePassword"
 		}
 
 		WindowsFeatureSet  WorkspaceDependencies {
@@ -375,7 +409,7 @@ Configuration WSBack
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies")
+			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[ReplaceText]replaceUser")
 		}
 
 		Common NestedCommon {}

@@ -50,15 +50,16 @@
     "VMSize": {
       "type": "string",
       "allowedValues": [
-        "Standard_F2s",
-        "Standard_F4s",
+        "Standard_F2",
+        "Standard_F4",
         "Standard_A2",
-        "Standard_A4"
+        "Standard_A4",
+        "Standard_D2_v2"
       ],
       "metadata": {
         "description": "The size that the virtual machines will use by default."
       },
-      "defaultValue": "Standard_F2s"
+      "defaultValue": "Standard_F2"
     }
   },
   "variables": {
@@ -215,7 +216,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_D2_v2"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('DCVMName')]",
@@ -382,7 +383,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A2"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('WSFrontVMName')]",
@@ -466,8 +467,9 @@
                 "function": "WSFront"
               },
               "configurationArguments": {
-                "artifactsLocation": "[parameters('_artifactsLocation')]"
-                //"ConfigurationData": "$confData"
+                "artifactsLocation": "[parameters('_artifactsLocation')]",
+                "user": "[parameters('adminUsername')]",
+                "pwd": "[parameters('adminPassword')]"
               }
             },
             "protectedSettings": {
@@ -524,7 +526,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A2"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('WSBackVMName')]",
@@ -608,7 +610,9 @@
                 "function": "WSBack"
               },
               "configurationArguments": {
-                "artifactsLocation": "[parameters('_artifactsLocation')]"
+                "artifactsLocation": "[parameters('_artifactsLocation')]",
+                "user": "[parameters('adminUsername')]",
+                "pwd": "[parameters('adminPassword')]"
               }
             },
             "protectedSettings": {
@@ -665,7 +669,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A2"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('SQLVMName')]",
@@ -870,7 +874,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A2"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('WSLBackVMName')]",
@@ -1014,7 +1018,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A2"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('WSLFrontVMName')]",
@@ -1217,7 +1221,7 @@
       },
       "properties": {
         "hardwareProfile": {
-          "vmSize": "Standard_A1"
+          "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('RabbitMQVMName')]",
