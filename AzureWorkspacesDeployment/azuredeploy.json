@@ -453,7 +453,8 @@
           "location": "[resourceGroup().location]",
           "dependsOn": [
             "[variables('WSFrontVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/joindomain')]"
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/joindomain')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/SqlIaasExtension')]"
           ],
           "properties": {
             "publisher": "Microsoft.Powershell",
@@ -469,7 +470,8 @@
               "configurationArguments": {
                 "artifactsLocation": "[parameters('_artifactsLocation')]",
                 "user": "[parameters('adminUsername')]",
-                "pwd": "[parameters('adminPassword')]"
+                "pwd": "[parameters('adminPassword')]",
+                "wsFqdn": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn]"
               }
             },
             "protectedSettings": {
@@ -482,6 +484,30 @@
           }
         }
       ]
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(variables('WSFrontVMName'), '/InstallWS')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/DSCConfiguration')]"
+      ],
+      "tags": {
+        "displayName": "Install WS Front"
+      },
+      "properties": {
+        "publisher": "Microsoft.Compute",
+        "type": "CustomScriptExtension",
+        "typeHandlerVersion": "1.9",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[concat(parameters('_artifactsLocation'), '/wsfront/Install.ps1', parameters('_artifactsLocationSasToken'))]"
+          ],
+          "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File wsfront/install.ps1"
+        }
+      }
     },
     {
       "apiVersion": "2015-06-15",
@@ -596,7 +622,9 @@
           "location": "[resourceGroup().location]",
           "dependsOn": [
             "[variables('WSBackVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('WSBackVMName'), '/extensions/joindomain')]"
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSBackVMName'), '/extensions/joindomain')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/SqlIaasExtension')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('RabbitMQVMName'), '/extensions/InstallRabbit')]"
           ],
           "properties": {
             "publisher": "Microsoft.Powershell",
@@ -692,7 +720,7 @@
           },
           "dataDisks": [
             {
-              "name": "sq-data-disk",
+              "name": "[concat(variables('SQLVMName'), '-data-disk')]",
               "caching": "None",
               "createOption": "Empty",
               "diskSizeGB": "32",
@@ -748,7 +776,7 @@
           "location": "[resourceGroup().location]",
           "dependsOn": [
             "[variables('SQLVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/joindomain')]"
+            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/SqlIaasExtension')]"
           ],
           "properties": {
             "publisher": "Microsoft.Powershell",
@@ -762,12 +790,19 @@
                 "function": "WSSQL"
               },
               "configurationArguments": {
+                "artifactsLocation": "[parameters('_artifactsLocation')]",
                 "TcpPort": "[variables('sqlPortNumber')]"
               }
             },
             "protectedSettings": {
               "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
-              "configurationArguments": {}
+              "configurationArguments": {
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
+                "SqlCredential": {
+                  "UserName": "[parameters('adminUsername')]",
+                  "Password": "[parameters('adminPassword')]"
+                }
+              }
             }
           }
         }
@@ -779,7 +814,7 @@
       "name": "[concat(variables('SQLVMName'), '/SqlIaasExtension')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'))]"
+        "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/joindomain')]"
       ],
       "tags": {
         "displayName": "SqlServer Extension"
@@ -946,7 +981,8 @@
           "location": "[resourceGroup().location]",
           "dependsOn": [
             "[variables('WSLBackVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('WSLBackVMName'), '/extensions/joindomain')]"
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSLBackVMName'), '/extensions/joindomain')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('RabbitMQVMName'), '/extensions/InstallRabbit')]"
           ],
           "properties": {
             "publisher": "Microsoft.Powershell",
@@ -1141,12 +1177,12 @@
           {
             "name": "enable_web_rule",
             "properties": {
-              "description": "Enable Internet to [variables('WSLFront')]",
+              "description": "Enable Internet to [variables('WSFront')]",
               "protocol": "Tcp",
               "sourcePortRange": "*",
-              "destinationPortRange": "443",
+              "destinationPortRange": "80",
               "sourceAddressPrefix": "Internet",
-              "destinationAddressPrefix": "10.10.0.10",
+              "destinationAddressPrefix": "10.0.0.8",
               "access": "Allow",
               "priority": 120,
               "direction": "Inbound"
@@ -1273,8 +1309,6 @@
             "[concat(parameters('_artifactsLocation'), '/rabbit.sh', parameters('_artifactsLocationSasToken'))]"
           ],
           "commandToExecute": "sh rabbit.sh"
-        },
-        "protectedSettings": {
         }
       }
     }

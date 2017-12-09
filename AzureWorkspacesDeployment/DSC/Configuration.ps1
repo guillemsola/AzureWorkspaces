@@ -4,7 +4,7 @@
 
 $InstallFolder = "C:\Install"
 $BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications"
-$BinariesVersion = "master"
+$BinariesVersion = "1.6.0"
 $NetworkService  = "NT AUTHORITY\NETWORK SERVICE"
 
 $confData = @{
@@ -162,8 +162,11 @@ Configuration WSFront
 		[string] $artifactsLocationSasToken,
 		[Parameter(Mandatory)]
 		[string] $binariesLocationSasToken,
+		[Parameter(Mandatory)]
 		[string] $user,
-		[string] $pwd
+		[Parameter(Mandatory)]
+		[string] $pwd,
+		[string] $wsFqdn
 	)
 
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco, xCertificate, FileContentDSC
@@ -180,12 +183,20 @@ Configuration WSFront
 			DestinationPath = $wsjson
 		}
 
+		ReplaceText replaceFQDN {
+			Path   = $wsjson
+            Search = '%fqdn%'
+            Type   = 'Text'
+            Text   = $wsFqdn
+			DependsOn = "[xRemoteFile]ConfigJson"
+		}
+
 		ReplaceText replacePassword {
 			Path   = $wsjson
             Search = '%password%'
             Type   = 'Text'
             Text   = $pwd
-			DependsOn = "[xRemoteFile]ConfigJson"
+			DependsOn = "[ReplaceText]replaceFQDN"
 		}
 
 		ReplaceText replaceUser {
@@ -219,7 +230,7 @@ Configuration WSFront
 		}
 
 		WindowsFeatureSet  WorkspaceDependencies {
-			Name = @("Web-Server","Web-App-Dev", "NET-Framework-Features", "NET-Framework-45-Core", "Web-WebSockets")
+			Name = @("Web-Server", "Web-Basic-Auth", "Web-Http-Redirect", "Web-Windows-Auth", "Web-App-Dev", "Web-Net-Ext45", "Web-AppInit", "Web-Asp-Net45", "Web-Mgmt-Tools", "Web-Scripting-Tools", "NET-Framework-45-Features", "NET-Framework-Features", "NET-Framework-45-Core", "Web-WebSockets")
 			Ensure = "Present"
 			IncludeAllSubFeature = $True
 		}
@@ -259,11 +270,20 @@ Configuration WSFront
 			DependsOn  = '[xRemoteFile]IISCertFile'
 		}
 		
+		<#
 		Script InstallCitrixStoreFront
 		{
 			SetScript = 
 			{
+				Set-Location -Path $using:InstallFolder
+
+				$env:SEE_MASK_NOZONECHECKS = 1
+
+				$using:citrixStoreFrontPath | Out-File "c:\install\citrixpath.log"
+
 				$res = Start-Process -FilePath $using:citrixStoreFrontPath -ArgumentList '-silent' -Wait -PassThru
+
+				$res | select * | Out-File "C:\install\citrixinstall.log"
 
 				if($res.ExitCode -gt 0) {
 					throw "Error installing Citrix Storefront"
@@ -281,7 +301,7 @@ Configuration WSFront
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = "[xRemoteFile]CitrixStorefront"
+			DependsOn = @("[xRemoteFile]CitrixStorefront", "[WindowsFeatureSet]WorkspaceDependencies")
 		}
 
 		$wsInstallerExe = Join-Path -Path $InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
@@ -290,7 +310,13 @@ Configuration WSFront
 		{
 			SetScript = 
 			{
+				Set-Location -Path $using:InstallFolder
+
 				$res = Start-Process -FilePath $using:wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
+
+				$res | select * | Out-File "C:\install\wsinstall.log"
+
+				pwd | select Path | Out-File "c:\install\wsdir.log"
 
 				if($res.ExitCode -gt 0) {
 					throw "Error installing Citrix Storefront"
@@ -312,8 +338,9 @@ Configuration WSFront
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs", "[ReplaceText]replaceUser")
+			DependsOn = @("[Archive]UnzipWorkspace", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs", "[ReplaceText]replaceUser")
 		}
+		#>
 	}
 }
 
@@ -326,7 +353,9 @@ Configuration WSBack
 		[string] $artifactsLocationSasToken,
 		[Parameter(Mandatory)]
 		[string] $binariesLocationSasToken,
+		[Parameter(Mandatory)]
 		[string] $user,
+		[Parameter(Mandatory)]
 		[string] $pwd
 	)
 
@@ -387,10 +416,14 @@ Configuration WSBack
 		{
 			SetScript = 
 			{
+				Set-Location -Path $using:InstallFolder
+
 				$res = Start-Process -FilePath $using:wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
 
+				$res | select * | Out-File "C:\install\wsinstall.log"
+
 				if($res.ExitCode -gt 0) {
-					throw "Error installing Citrix Storefront"
+					throw "Error installing Workspaces"
 				}
 			}
 			TestScript = 
@@ -422,9 +455,19 @@ Configuration WSSQL
 {
 	param(
 		[Parameter(Mandatory)]
-		[string] $TcpPort
+		[string] $artifactsLocation,
+		[Parameter(Mandatory)]
+		[string] $artifactsLocationSasToken,
+		[Parameter(Mandatory)]
+		[string] $TcpPort,
+		[Parameter(Mandatory)]
+		[PSCredential] $SqlCredential
 	)
-	Import-DscResource -ModuleName PSDesiredStateConfiguration, xSqlServer
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, xSqlServer
+
+	$getScript = Join-Path -Path $InstallFolder -ChildPath "Get-Workspace.sql"
+	$setScript = Join-Path -Path $InstallFolder -ChildPath "Set-Workspace.sql"
+	$testScript = Join-Path -Path $InstallFolder -ChildPath "Test-Workspace.sql"
 
 	Node localhost
 	{
@@ -433,10 +476,38 @@ Configuration WSSQL
 			InstanceName = "MSSQLSERVER"
 			ProtocolName = "Tcp"
 			IsEnabled = $true
-			TcpDynamicPorts = ""
+			TcpDynamicPort = $false
 			TcpPort = $TcpPort
 			RestartService = $true
 		}
+
+		xRemoteFile GetSqlScript{
+			Uri = "$artifactsLocation/SQL/Get-Workspace.sql$artifactsLocationSasToken"
+			DestinationPath = $getScript
+		}
+
+		xRemoteFile SetSqlScript{
+			Uri = "$artifactsLocation/SQL/Set-Workspace.sql$artifactsLocationSasToken"
+			DestinationPath = $setScript
+			DependsOn = "[xRemoteFile]GetSqlScript"
+		}
+
+		xRemoteFile TestSqlScript{
+			Uri = "$artifactsLocation/SQL/Test-Workspace.sql$artifactsLocationSasToken"
+			DestinationPath = $testScript
+			DependsOn = "[xRemoteFile]SetSqlScript"
+		}
+
+		xSQLServerScript CreateDatabase
+        {
+            ServerInstance = 'sql.ws.local'
+            Credential     = $SqlCredential
+            SetFilePath    = $setScript
+            TestFilePath   = $testScript
+            GetFilePath    = $getScript
+            Variable       = @("FilePath=C:\temp\log\AuditFiles")
+			DependsOn = "[xRemoteFile]TestSqlScript"
+        }
 
 		Common NestedCommon {}
 	}
