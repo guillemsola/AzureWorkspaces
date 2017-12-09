@@ -380,75 +380,7 @@
         }
       },
       "resources": [
-        {
-          "name": "[concat(variables('SQLVMName'), '/joindomain')]",
-          "type": "Microsoft.Compute/virtualMachines/extensions",
-          "comments": "Join domain - JsonADDomainExtension",
-          "apiVersion": "2016-03-30",
-          "location": "[resourceGroup().location]",
-          "dependsOn": [
-            "[variables('SQLVMName')]"
-          ],
-          "tags": {
-            "displayName": "Join domain"
-          },
-          "properties": {
-            "publisher": "Microsoft.Compute",
-            "type": "JsonADDomainExtension",
-            "typeHandlerVersion": "1.3",
-            "autoUpgradeMinorVersion": true,
-            "settings": {
-              "Name": "[parameters('domainName')]",
-              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
-              "Restart": "true",
-              "Options": "3",
-              "OUPath": "[variables('OuPath')]"
-            },
-            "protectedSettings": {
-              "Password": "[parameters('adminPassword')]"
-            }
-          }
-        },
-        {
-          "type": "extensions",
-          "name": "DSCConfiguration",
-          "apiVersion": "2015-06-15",
-          "tags": {
-            "displayName": "DSC Configuration"
-          },
-          "location": "[resourceGroup().location]",
-          "dependsOn": [
-            "[variables('SQLVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/SqlIaasExtension')]"
-          ],
-          "properties": {
-            "publisher": "Microsoft.Powershell",
-            "type": "DSC",
-            "typeHandlerVersion": "2.20",
-            "autoUpgradeMinorVersion": true,
-            "settings": {
-              "configuration": {
-                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
-                "script": "Configuration.ps1",
-                "function": "WSSQL"
-              },
-              "configurationArguments": {
-                "artifactsLocation": "[parameters('_artifactsLocation')]",
-                "TcpPort": "[variables('sqlPortNumber')]"
-              }
-            },
-            "protectedSettings": {
-              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
-              "configurationArguments": {
-                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
-                "SqlCredential": {
-                  "UserName": "[parameters('adminUsername')]",
-                  "Password": "[parameters('adminPassword')]"
-                }
-              }
-            }
-          }
-        }
+        
       ]
     }
   ],
