@@ -18,7 +18,8 @@
       "type": "string",
       "metadata": {
         "description": "The FQDN of the Active Directory Domain to be created"
-      }
+      },
+      "defaultValue": "ws.local"
     },
     "dnsPrefix": {
       "type": "string",
@@ -127,22 +128,6 @@
       }
     },
     {
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "[variables('DMZpublicIPAddressName')]",
-      "condition": "[equals('True', 'False')]",
-      "apiVersion": "2016-03-30",
-      "tags": {
-        "displayName": "WSL Public IP"
-      },
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": {
-          "domainNameLabel": "[concat('wsl-', parameters('dnsPrefix'))]"
-        }
-      }
-    },
-    {
       "type": "Microsoft.Network/virtualNetworks",
       "name": "[variables('virtualNetworkName')]",
       "apiVersion": "2017-06-01",
@@ -154,7 +139,7 @@
         "addressSpace": {
           "addressPrefixes": [
             "[variables('DCSubnetAddressPrefix')]"
-            //"[variables('DMZSubnetAddressPrefix')]"
+            "[variables('DMZSubnetAddressPrefix')]"
           ]
         },
         "subnets": [
@@ -164,12 +149,6 @@
               "addressPrefix": "[variables('DCSubnetAddressPrefix')]"
             }
           }
-          //{
-          //  "name": "[variables('DMZSubnetName')]",
-          //  "properties": {
-          //    "addressPrefix": "[variables('DMZSubnetAddressPrefix')]"
-          //  }
-          //}
         ]
       }
     },
@@ -183,7 +162,7 @@
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
-        //"[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
       ],
       "properties": {
         "ipConfigurations": [
@@ -192,9 +171,6 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "[variables('DCIPAddress')]",
-              //"publicIPAddress": {
-              //  "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
-              //},
               "subnet": {
                 "id": "[variables('DCSubnetRef')]"
               }
@@ -321,12 +297,6 @@
           "subnetRange1": {
             "value": "[variables('DCSubnetAddressPrefix')]"
           },
-          //"subnetName2": {
-          //  "value": "[variables('DMZSubnetName')]"
-          //},
-          //"subnetRange2": {
-          //  "value": "[variables('DMZSubnetAddressPrefix')]"
-          //},
           "DNSServerAddress": {
             "value": [
               "[variables('DCIPAddress')]"
@@ -865,264 +835,6 @@
       }
     },
     {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Network/networkInterfaces",
-      "condition": "[equals('True', 'False')]",
-      "name": "[concat(variables('WSLBackVMName'), '-NIC')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "WSL Back NIC"
-      },
-      "dependsOn": [
-        "Microsoft.Resources/deployments/UpdateVNetDNS"
-      ],
-      "properties": {
-        "ipConfigurations": [
-          {
-            "name": "ipconfig1",
-            "properties": {
-              "privateIPAllocationMethod": "Dynamic",
-              "subnet": {
-                "id": "[variables('DCSubnetRef')]"
-              }
-            }
-          }
-        ],
-        "dnsSettings": {
-          "dnsServers": [
-            "[variables('DCIPAddress')]"
-          ]
-        }
-      }
-    },
-    {
-      "apiVersion": "2017-03-30",
-      "type": "Microsoft.Compute/virtualMachines",
-      "name": "[variables('WSLBackVMName')]",
-      "condition": "[equals('True', 'False')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "WSL Back"
-      },
-      "dependsOn": [
-        "[concat('Microsoft.Network/networkInterfaces/', variables('WSLBackVMName'), '-NIC')]"
-      ],
-      "properties": {
-        "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
-        },
-        "osProfile": {
-          "computerName": "[variables('WSLBackVMName')]",
-          "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]",
-          "windowsConfiguration": {
-            "enableAutomaticUpdates": false
-          }
-        },
-        "storageProfile": {
-          "imageReference": {
-            "publisher": "MicrosoftWindowsServer",
-            "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
-            "version": "latest"
-          },
-          "osDisk": {
-            "name": "[concat(variables('WSLBackVMName'), '-os-disk')]",
-            "createOption": "FromImage"
-          }
-        },
-        "networkProfile": {
-          "networkInterfaces": [
-            {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('WSLBackVMName'), '-NIC'))]"
-            }
-          ]
-        }
-      },
-      "resources": [
-        {
-          "name": "[concat(variables('WSLBackVMName'), '/joindomain')]",
-          "type": "Microsoft.Compute/virtualMachines/extensions",
-          "condition": "[equals('True', 'False')]",
-          "comments": "Join domain - JsonADDomainExtension",
-          "apiVersion": "2016-03-30",
-          "location": "[resourceGroup().location]",
-          "dependsOn": [
-            "[variables('WSLBackVMName')]"
-          ],
-          "tags": {
-            "displayName": "Join domain"
-          },
-          "properties": {
-            "publisher": "Microsoft.Compute",
-            "type": "JsonADDomainExtension",
-            "typeHandlerVersion": "1.3",
-            "autoUpgradeMinorVersion": true,
-            "settings": {
-              "Name": "[parameters('domainName')]",
-              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
-              "Restart": "true",
-              "Options": "3",
-              "OUPath": "[variables('OuPath')]"
-            },
-            "protectedSettings": {
-              "Password": "[parameters('adminPassword')]"
-            }
-          }
-        },
-        {
-          "type": "extensions",
-          "name": "DSCConfiguration",
-          "condition": "[equals('True', 'False')]",
-          "apiVersion": "2015-06-15",
-          "tags": {
-            "displayName": "DSC Configuration"
-          },
-          "location": "[resourceGroup().location]",
-          "dependsOn": [
-            "[variables('WSLBackVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('WSLBackVMName'), '/extensions/joindomain')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('RabbitMQVMName'), '/extensions/InstallRabbit')]"
-          ],
-          "properties": {
-            "publisher": "Microsoft.Powershell",
-            "type": "DSC",
-            "typeHandlerVersion": "2.20",
-            "autoUpgradeMinorVersion": true,
-            "settings": {
-              "configuration": {
-                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
-                "script": "Configuration.ps1",
-                "function": "WSLBack"
-              },
-              "configurationArguments": {
-                "artifactsLocation": "[parameters('_artifactsLocation')]"
-              }
-            },
-            "protectedSettings": {
-              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
-              "configurationArguments": {
-                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]"
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Network/networkInterfaces",
-      "name": "[concat(variables('WSLFrontVMName'), '-NIC')]",
-      "condition": "[equals('True', 'False')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "WSL Front NIC"
-      },
-      "dependsOn": [
-        "Microsoft.Resources/deployments/UpdateVNetDNS",
-        "[resourceId('Microsoft.Network/publicIPAddresses', variables('DMZpublicIPAddressName'))]"
-      ],
-      "properties": {
-        "ipConfigurations": [
-          {
-            "name": "ipconfig1",
-            "properties": {
-              "privateIPAllocationMethod": "Static",
-              "privateIPAddress": "10.10.0.10",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DMZpublicIPAddressName'))]"
-              },
-              "subnet": {
-                "id": "[variables('DMZSubnetRef')]"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "apiVersion": "2017-03-30",
-      "type": "Microsoft.Compute/virtualMachines",
-      "condition": "[equals('True', 'False')]",
-      "name": "[variables('WSLFrontVMName')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "WSL Front"
-      },
-      "dependsOn": [
-        "[concat('Microsoft.Network/networkInterfaces/', variables('WSLFrontVMName'), '-NIC')]"
-      ],
-      "properties": {
-        "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
-        },
-        "osProfile": {
-          "computerName": "[variables('WSLFrontVMName')]",
-          "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]",
-          "windowsConfiguration": {
-            "enableAutomaticUpdates": false
-          }
-        },
-        "storageProfile": {
-          "imageReference": {
-            "publisher": "MicrosoftWindowsServer",
-            "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
-            "version": "latest"
-          },
-          "osDisk": {
-            "name": "[concat(variables('WSLFrontVMName'), '-os-disk')]",
-            "createOption": "FromImage"
-          }
-        },
-        "networkProfile": {
-          "networkInterfaces": [
-            {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces/', concat(variables('WSLFrontVMName'), '-NIC'))]"
-            }
-          ]
-        }
-      },
-      "resources": [
-        {
-          "type": "extensions",
-          "name": "DSCConfiguration",
-          "condition": "[equals('True', 'False')]",
-          "apiVersion": "2015-06-15",
-          "tags": {
-            "displayName": "DSC Configuration"
-          },
-          "location": "[resourceGroup().location]",
-          "dependsOn": [
-            "[variables('WSLFrontVMName')]"
-          ],
-          "properties": {
-            "publisher": "Microsoft.Powershell",
-            "type": "DSC",
-            "typeHandlerVersion": "2.20",
-            "autoUpgradeMinorVersion": true,
-            "settings": {
-              "configuration": {
-                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
-                "script": "Configuration.ps1",
-                "function": "WSLFront"
-              },
-              "configurationArguments": {
-                "artifactsLocation": "[parameters('_artifactsLocation')]"
-              }
-            },
-            "protectedSettings": {
-              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
-              "configurationArguments": {
-                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]"
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
       "type": "Microsoft.Network/networkSecurityGroups",
       "name": "[variables('NSGName')]",
       "apiVersion": "2016-03-30",
@@ -1202,20 +914,6 @@
               "direction": "Inbound"
             }
           }
-          //{
-          //  "name": "deny_frontend_rule",
-          //  "properties": {
-          //    "description": "Isolate the [variables('DMZSubnetAddressPrefix')] subnet from the [variables('DCSubnetAddressPrefix')] subnet",
-          //    "protocol": "*",
-          //    "sourcePortRange": "*",
-          //    "destinationPortRange": "*",
-          //    "sourceAddressPrefix": "[variables('DMZSubnetAddressPrefix')]",
-          //    "destinationAddressPrefix": "[variables('DCSubnetAddressPrefix')]",
-          //    "access": "Deny",
-          //    "priority": 150,
-          //    "direction": "Inbound"
-          //  }
-          //}
         ]
       }
     },
