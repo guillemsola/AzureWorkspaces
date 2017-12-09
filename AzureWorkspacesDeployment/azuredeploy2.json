@@ -326,62 +326,6 @@
           ]
         }
       }
-    },
-    {
-      "apiVersion": "2017-03-30",
-      "type": "Microsoft.Compute/virtualMachines",
-      "name": "[variables('SQLVMName')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "SQL "
-      },
-      "dependsOn": [
-        "[concat('Microsoft.Network/networkInterfaces/', variables('SQLVMName'), '-NIC')]"
-      ],
-      "properties": {
-        "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
-        },
-        "osProfile": {
-          "computerName": "[variables('SQLVMName')]",
-          "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]",
-          "windowsConfiguration": {
-            "enableAutomaticUpdates": false
-          }
-        },
-        "storageProfile": {
-          "imageReference": {
-            "publisher": "MicrosoftSQLServer",
-            "offer": "SQL2016SP1-WS2016",
-            "sku": "SQLDEV",
-            "version": "latest"
-          },
-          "osDisk": {
-            "name": "[concat(variables('SQLVMName'), '-os-disk')]",
-            "createOption": "FromImage"
-          },
-          "dataDisks": [
-            {
-              "name": "[concat(variables('SQLVMName'), '-data-disk')]",
-              "caching": "None",
-              "createOption": "Empty",
-              "diskSizeGB": "32",
-              "lun": 0
-            }
-          ]
-        },
-        "networkProfile": {
-          "networkInterfaces": [
-            {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('SQLVMName'), '-NIC'))]"
-            }
-          ]
-        }
-      },
-      "resources": [
-        
-      ]
     }
   ],
   "outputs": {
