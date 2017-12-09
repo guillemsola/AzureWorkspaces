@@ -70,7 +70,7 @@
     "SQLVMName": "SQL",
     "WSLBackVMName": "WSLBack",
     "WSLFrontVMName": "WSLFront",
-    "RabbitMQVMName": "Rabbit",
+    "RabbitMQVMName": "uburabbit",
     "virtualNetworkName": "WSVNet",
     "virtualNetworkAddressRange": "10.0.0.0/8",
     "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'wssa')]",
