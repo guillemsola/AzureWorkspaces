@@ -79,7 +79,17 @@
     "DCSubnetName": "DCSubnet",
     "DCSubnetAddressPrefix": "10.0.0.0/24",
     "WSPpublicIPAddressName": "wspPublicIP",
-    "OuPath": "OU=Servers,DC=ws,DC=local"
+    "OuPath": "OU=Servers,DC=ws,DC=local",
+    "sqlAutopatchingDayOfWeek": "Sunday",
+    "sqlAutopatchingStartHour": "2",
+    "sqlAutopatchingWindowDuration": "60",
+    "sqlConnectivityType": "Private",
+    "sqlPortNumber": 1433,
+    "sqlStorageDisksCount": 1,
+    "sqlStorageWorkloadType": "GENERAL",
+    "sqlStorageDisksConfigurationType": "NEW",
+    "sqlStorageStartingDeviceId": 2,
+    "rServicesEnabled": "false"
   },
   "resources": [
     {
@@ -252,6 +262,250 @@
           }
         }
       ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "name": "UpdateVNetDNS",
+      "apiVersion": "2016-02-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('DCVMName'), 'CreateADForest')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[concat(parameters('_artifactsLocation'), '/nestedtemplates/vnet-with-dns-server.json', parameters('_artifactsLocationSasToken'))]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "virtualNetworkName": {
+            "value": "[variables('virtualNetworkName')]"
+          },
+          "NSGName": {
+            "value": "[variables('NSGName')]"
+          },
+          "subnetName1": {
+            "value": "[variables('DCSubnetName')]"
+          },
+          "subnetRange1": {
+            "value": "[variables('DCSubnetAddressPrefix')]"
+          },
+          "DNSServerAddress": {
+            "value": [
+              "[variables('DCIPAddress')]"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('SQLVMName'), '-NIC')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "SQL NIC"
+      },
+      "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('DCSubnetRef')]"
+              }
+            }
+          }
+        ],
+        "dnsSettings": {
+          "dnsServers": [
+            "[variables('DCIPAddress')]"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2017-03-30",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('SQLVMName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "SQL "
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('SQLVMName'), '-NIC')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('VMSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('SQLVMName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": false
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftSQLServer",
+            "offer": "SQL2016SP1-WS2016",
+            "sku": "SQLDEV",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(variables('SQLVMName'), '-os-disk')]",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "[concat(variables('SQLVMName'), '-data-disk')]",
+              "caching": "None",
+              "createOption": "Empty",
+              "diskSizeGB": "32",
+              "lun": 0
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('SQLVMName'), '-NIC'))]"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "[concat(variables('SQLVMName'), '/joindomain')]",
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "comments": "Join domain - JsonADDomainExtension",
+          "apiVersion": "2016-03-30",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('SQLVMName')]"
+          ],
+          "tags": {
+            "displayName": "Join domain"
+          },
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "JsonADDomainExtension",
+            "typeHandlerVersion": "1.3",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "Name": "[parameters('domainName')]",
+              "User": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+              "Restart": "true",
+              "Options": "3",
+              "OUPath": "[variables('OuPath')]"
+            },
+            "protectedSettings": {
+              "Password": "[parameters('adminPassword')]"
+            }
+          }
+        },
+        {
+          "type": "extensions",
+          "name": "DSCConfiguration",
+          "apiVersion": "2015-06-15",
+          "tags": {
+            "displayName": "DSC Configuration"
+          },
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[variables('SQLVMName')]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/SqlIaasExtension')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.20",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "[concat(parameters('_artifactsLocation'), '/Configuration.zip')]",
+                "script": "Configuration.ps1",
+                "function": "WSSQL"
+              },
+              "configurationArguments": {
+                "artifactsLocation": "[parameters('_artifactsLocation')]",
+                "TcpPort": "[variables('sqlPortNumber')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
+              "configurationArguments": {
+                "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
+                "SqlCredential": {
+                  "UserName": "[parameters('adminUsername')]",
+                  "Password": "[parameters('adminPassword')]"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(variables('SQLVMName'), '/SqlIaasExtension')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/joindomain')]"
+      ],
+      "tags": {
+        "displayName": "SqlServer Extension"
+      },
+      "properties": {
+        "type": "SqlIaaSAgent",
+        "publisher": "Microsoft.SqlServer.Management",
+        "typeHandlerVersion": "1.2",
+        "autoUpgradeMinorVersion": "true",
+        "settings": {
+          "AutoTelemetrySettings": {
+            "Region": "[resourceGroup().location]"
+          },
+          "AutoPatchingSettings": {
+            "PatchCategory": "WindowsMandatoryUpdates",
+            "Enable": true,
+            "DayOfWeek": "[variables('sqlAutopatchingDayOfWeek')]",
+            "MaintenanceWindowStartingHour": "[variables('sqlAutopatchingStartHour')]",
+            "MaintenanceWindowDuration": "[variables('sqlAutopatchingWindowDuration')]"
+          },
+          "KeyVaultCredentialSettings": {
+            "Enable": false,
+            "CredentialName": ""
+          },
+          "ServerConfigurationsManagementSettings": {
+            "SQLConnectivityUpdateSettings": {
+              "ConnectivityType": "[variables('sqlConnectivityType')]",
+              "Port": "[variables('sqlPortNumber')]"
+            },
+            "SQLWorkloadTypeUpdateSettings": {
+              "SQLWorkloadType": "[variables('sqlStorageWorkloadType')]"
+            },
+            "SQLStorageUpdateSettings": {
+              "DiskCount": "[variables('sqlStorageDisksCount')]",
+              "NumberOfColumns": "[variables('sqlStorageDisksCount')]",
+              "StartingDeviceID": "[variables('sqlStorageStartingDeviceId')]",
+              "DiskConfigurationType": "[variables('sqlStorageDisksConfigurationType')]"
+            },
+            "AdditionalFeaturesServerConfigurations": {
+              "IsRServicesEnabled": "[variables('rServicesEnabled')]"
+            }
+          }
+        },
+        "protectedSettings": {
+          "SQLAuthUpdateUserName": "[parameters('adminUsername')]",
+          "SQLAuthUpdatePassword": "[parameters('adminPassword')]"
+        }
+      }
     }
   ],
   "outputs": {
