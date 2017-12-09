@@ -138,7 +138,7 @@
       "properties": {
         "addressSpace": {
           "addressPrefixes": [
-            "[variables('DCSubnetAddressPrefix')]"
+            "[variables('DCSubnetAddressPrefix')]",
             "[variables('DMZSubnetAddressPrefix')]"
           ]
         },
@@ -161,7 +161,7 @@
       },
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
+        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
         "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
       ],
       "properties": {
