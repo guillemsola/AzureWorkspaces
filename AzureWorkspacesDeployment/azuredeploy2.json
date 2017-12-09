@@ -450,62 +450,6 @@
           }
         }
       ]
-    },
-    {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(variables('SQLVMName'), '/SqlIaasExtension')]",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/joindomain')]"
-      ],
-      "tags": {
-        "displayName": "SqlServer Extension"
-      },
-      "properties": {
-        "type": "SqlIaaSAgent",
-        "publisher": "Microsoft.SqlServer.Management",
-        "typeHandlerVersion": "1.2",
-        "autoUpgradeMinorVersion": "true",
-        "settings": {
-          "AutoTelemetrySettings": {
-            "Region": "[resourceGroup().location]"
-          },
-          "AutoPatchingSettings": {
-            "PatchCategory": "WindowsMandatoryUpdates",
-            "Enable": true,
-            "DayOfWeek": "[variables('sqlAutopatchingDayOfWeek')]",
-            "MaintenanceWindowStartingHour": "[variables('sqlAutopatchingStartHour')]",
-            "MaintenanceWindowDuration": "[variables('sqlAutopatchingWindowDuration')]"
-          },
-          "KeyVaultCredentialSettings": {
-            "Enable": false,
-            "CredentialName": ""
-          },
-          "ServerConfigurationsManagementSettings": {
-            "SQLConnectivityUpdateSettings": {
-              "ConnectivityType": "[variables('sqlConnectivityType')]",
-              "Port": "[variables('sqlPortNumber')]"
-            },
-            "SQLWorkloadTypeUpdateSettings": {
-              "SQLWorkloadType": "[variables('sqlStorageWorkloadType')]"
-            },
-            "SQLStorageUpdateSettings": {
-              "DiskCount": "[variables('sqlStorageDisksCount')]",
-              "NumberOfColumns": "[variables('sqlStorageDisksCount')]",
-              "StartingDeviceID": "[variables('sqlStorageStartingDeviceId')]",
-              "DiskConfigurationType": "[variables('sqlStorageDisksConfigurationType')]"
-            },
-            "AdditionalFeaturesServerConfigurations": {
-              "IsRServicesEnabled": "[variables('rServicesEnabled')]"
-            }
-          }
-        },
-        "protectedSettings": {
-          "SQLAuthUpdateUserName": "[parameters('adminUsername')]",
-          "SQLAuthUpdatePassword": "[parameters('adminPassword')]"
-        }
-      }
     }
   ],
   "outputs": {
