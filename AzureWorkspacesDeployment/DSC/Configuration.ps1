@@ -82,7 +82,7 @@ Configuration FrontEnd
 		Profile = ("Domain")
 		Direction = "Inbound"
 		LocalPort = ("8880")
-		RemotePort = ("8880")
+		RemotePort = "Any"
 		Protocol = "TCP"
 		Description = "Open port for query engine"
 		Enabled = "True"
@@ -96,7 +96,7 @@ Configuration FrontEnd
 		Profile = ("Domain")
 		Direction = "Inbound"
 		LocalPort = ("8081", "8082")
-		RemotePort = ("8081", "8082")
+		RemotePort = "Any"
 		Protocol = "TCP"
 		Description = "Open ports for query agent"
 		Enabled = "True"
