@@ -474,7 +474,7 @@
           "fileUris": [
             "[concat(parameters('_artifactsLocation'), '/wsfront/Install.ps1', parameters('_artifactsLocationSasToken'))]"
           ],
-          "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File wsfront/install.ps1"
+          "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File install.ps1"
         }
       }
     },
