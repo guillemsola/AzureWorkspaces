@@ -296,36 +296,6 @@
           }
         }
       }
-    },
-    {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Network/networkInterfaces",
-      "name": "[concat(variables('SQLVMName'), '-NIC')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "displayName": "SQL NIC"
-      },
-      "dependsOn": [
-        "Microsoft.Resources/deployments/UpdateVNetDNS"
-      ],
-      "properties": {
-        "ipConfigurations": [
-          {
-            "name": "ipconfig1",
-            "properties": {
-              "privateIPAllocationMethod": "Dynamic",
-              "subnet": {
-                "id": "[variables('DCSubnetRef')]"
-              }
-            }
-          }
-        ],
-        "dnsSettings": {
-          "dnsServers": [
-            "[variables('DCIPAddress')]"
-          ]
-        }
-      }
     }
   ],
   "outputs": {
