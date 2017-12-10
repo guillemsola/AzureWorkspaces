@@ -53,6 +53,7 @@
       "allowedValues": [
         "Standard_F2",
         "Standard_F4",
+        "Standard_A1",
         "Standard_A2",
         "Standard_A4",
         "Standard_D2_v2"
@@ -60,7 +61,7 @@
       "metadata": {
         "description": "The size that the virtual machines will use by default."
       },
-      "defaultValue": "Standard_F2"
+      "defaultValue": "Standard_A2"
     }
   },
   "variables": {
@@ -921,6 +922,7 @@
       "location": "[resourceGroup().location]",
       "apiVersion": "2016-03-30",
       "dependsOn": [
+        "Microsoft.Resources/deployments/UpdateVNetDNS"
       ],
       "tags": {
         "displayName": "RabbitMQ NIC"
