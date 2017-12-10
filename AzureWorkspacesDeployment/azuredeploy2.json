@@ -262,40 +262,6 @@
           }
         }
       ]
-    },
-    {
-      "type": "Microsoft.Resources/deployments",
-      "name": "UpdateVNetDNS",
-      "apiVersion": "2016-02-01",
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines/extensions', variables('DCVMName'), 'CreateADForest')]"
-      ],
-      "properties": {
-        "mode": "Incremental",
-        "templateLink": {
-          "uri": "[concat(parameters('_artifactsLocation'), '/nestedtemplates/vnet-with-dns-server.json', parameters('_artifactsLocationSasToken'))]",
-          "contentVersion": "1.0.0.0"
-        },
-        "parameters": {
-          "virtualNetworkName": {
-            "value": "[variables('virtualNetworkName')]"
-          },
-          "NSGName": {
-            "value": "[variables('NSGName')]"
-          },
-          "subnetName1": {
-            "value": "[variables('DCSubnetName')]"
-          },
-          "subnetRange1": {
-            "value": "[variables('DCSubnetAddressPrefix')]"
-          },
-          "DNSServerAddress": {
-            "value": [
-              "[variables('DCIPAddress')]"
-            ]
-          }
-        }
-      }
     }
   ],
   "outputs": {
