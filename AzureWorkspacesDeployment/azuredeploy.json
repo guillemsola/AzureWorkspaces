@@ -5,7 +5,7 @@
     "adminUsername": {
       "type": "string",
       "metadata": {
-        "description": "The name of the administrator account of the new VM and domain"
+        "description": "The root WS user name for the first login. It will be used to as the name of the administrator account of the new VMs and domain. "
       }
     },
     "adminPassword": {
@@ -17,34 +17,34 @@
     "domainName": {
       "type": "string",
       "metadata": {
-        "description": "The FQDN of the Active Directory Domain to be created"
+        "description": "The FQDN of the Active Directory Domain to be created. Notice that currently value is limited to ws.local."
       },
       "defaultValue": "ws.local"
     },
     "dnsPrefix": {
       "type": "string",
       "metadata": {
-        "description": "The DNS prefix for the public IP address used by the Load Balancer"
+        "description": "The DNS prefix for the public IP address used for the WS Portal website and server http://*dnsprefix*.westeurope.cloudapp.azure.com/Workspace/dashboard. The full DNS name has to be unique for each Azure region"
       }
     },
     "_artifactsLocation": {
       "type": "string",
       "metadata": {
-        "description": "The location of resources, such as templates and DSC modules, that the template depends on"
+        "description": "The location of resources, such as templates and DSC modules, that the template depends on. Let it to the github project to use defaults"
       },
       "defaultValue": "https://raw.githubusercontent.com/guillemsola/AzureWorkspaces/master/AzureWorkspacesDeployment/Artifacts"
     },
     "_artifactsLocationSasToken": {
       "type": "securestring",
       "metadata": {
-        "description": "Auto-generated token to access _artifactsLocation"
+        "description": "Auto-generated token to access template resources. Notice that github does not require it but deployment template yes. Leave it to ?foo in this case."
       },
-      "defaultValue": ""
+      "defaultValue": "?foo"
     },
     "_binariesLocationSasToken": {
       "type": "securestring",
       "metadata": {
-        "description": "Token to access installer binaries that has been given to you. Beware that token has a date of expiry."
+        "description": "Token to access ASG installer binaries that has been given to you. Beware that token has a date of expiry."
       },
       "defaultValue": ""
     },
@@ -59,7 +59,7 @@
         "Standard_D2_v2"
       ],
       "metadata": {
-        "description": "The size that the virtual machines will use by default."
+        "description": "The default size applied for virtual machines."
       },
       "defaultValue": "Standard_A2"
     }

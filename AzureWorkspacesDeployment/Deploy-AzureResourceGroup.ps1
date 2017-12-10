@@ -1,4 +1,46 @@
-#Requires -Version 3.0
+<#
+.SYNOPSIS
+	Deploys Workspaces in Azure.
+
+.DESCRIPTION
+	Azure ARM template to deploy a full featured ASG Workspaces Portal.
+
+.PARAMETER ResourceGroupLocation
+	Azure region where deployment will be performed.
+
+.PARAMTER ResourceGroupName
+	The Azure resource group name.
+
+.PARAMTER UploadArtifacts
+	If set, DSC resources will be zipped and together with other resources upload during the deployment.
+
+.PARAMETER StorageAccountName
+	Resource group where deployment artifacts will be stored. If not set a default one will be created.
+
+.PARAMTER StorageContainerName
+	File container name that will be created in the storage account.
+
+.PARAMETER TemplateFile
+	File to be used for the deployment
+
+.PARAMETER TemplateParametersFile
+	Custom values set for the deployment.
+
+.PARAMETER ArtifactStagingDirectory
+	Folder that will be uploaded to the storage container.
+
+.PARAMETER DSCSourceFolder
+	Where the DSC resources are located
+
+.PARAMETER ValidateOnly
+	If set no template will be validated but not deployed.
+
+.NOTES
+	All rights reserved to ASG Technologies.
+
+
+Requires -Version 3.0
+#>
 
 Param(
     [string] [Parameter(Mandatory=$true)] $ResourceGroupLocation,
@@ -45,12 +87,14 @@ if ($UploadArtifacts) {
     $OptionalParameters[$ArtifactsLocationName] = $JsonParameters | Select -Expand $ArtifactsLocationName -ErrorAction Ignore | Select -Expand 'value' -ErrorAction Ignore
     $OptionalParameters[$ArtifactsLocationSasTokenName] = $JsonParameters | Select -Expand $ArtifactsLocationSasTokenName -ErrorAction Ignore | Select -Expand 'value' -ErrorAction Ignore
 
-	$BinariesLocationSasToken = "_binariesLocationSasToken"
-	#$ctx = New-AzureStorageContext -StorageAccountName appmirrorbinaries -StorageAccountKey (Get-AzureRmStorageAccountKey -ResourceGroupName AppMirror_Scallability_Tests -Name appmirrorbinaries)[0].Value
-	#$tokenBinaries = (Get-AzureStorageShare -Name host-applications -Context $ctx | New-AzureStorageShareSASToken -Permission "r" -Context $ctx -ExpiryTime (Get-Date).AddDays(30))
-	#$OptionalParameters["_binariesLocationSasToken"] = ConvertTo-SecureString -AsPlainText -Force $tokenBinaries
-	$OptionalParameters[$BinariesLocationSasToken] = $JsonParameters | Select -Expand $BinariesLocationSasToken -ErrorAction Ignore | Select -Expand 'value' -ErrorAction Ignore
-	$OptionalParameters[$BinariesLocationSasToken] = ConvertTo-SecureString -AsPlainText -Force "?sv=2017-04-17&ss=bfqt&srt=sco&sp=rwdlacup&se=2018-03-30T06:50:02Z&st=2017-12-03T22:50:02Z&spr=https&sig=zRy104QGozuILwY5S5gEifN1RMd6%2BBC3ymjhWTcboas%3D"
+	#$BinariesLocationSasToken = "_binariesLocationSasToken"
+	<#
+	$ctx = New-AzureStorageContext -StorageAccountName appmirrorbinaries -StorageAccountKey (Get-AzureRmStorageAccountKey -ResourceGroupName AppMirror_Scallability_Tests -Name appmirrorbinaries)[0].Value
+	$tokenBinaries = (Get-AzureStorageShare -Name host-applications -Context $ctx | New-AzureStorageShareSASToken -Permission "r" -Context $ctx -ExpiryTime (Get-Date).AddDays(30))
+	$OptionalParameters["_binariesLocationSasToken"] = ConvertTo-SecureString -AsPlainText -Force $tokenBinaries
+	#>
+	#$OptionalParameters[$BinariesLocationSasToken] = $JsonParameters | Select -Expand $BinariesLocationSasToken -ErrorAction Ignore | Select -Expand 'value' -ErrorAction Ignore
+	#$OptionalParameters[$BinariesLocationSasToken] = ConvertTo-SecureString -AsPlainText -Force ""
 
     # Create DSC configuration archive
     if (Test-Path $DSCSourceFolder) {
