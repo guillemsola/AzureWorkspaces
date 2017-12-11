@@ -459,6 +459,7 @@
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "name": "[concat(variables('WSFrontVMName'), '/InstallWS')]",
       "location": "[resourceGroup().location]",
+      "condition":  "[equals('True', 'True')]",
       "dependsOn": [
         "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/DSCConfiguration')]"
       ],
@@ -1015,7 +1016,7 @@
   "outputs": {
     "workspaceUrl": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn]"
+      "value": "[concat('http://', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn, '/Workspace')]"
     }
   }
 }

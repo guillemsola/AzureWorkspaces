@@ -179,6 +179,10 @@ Configuration WSFront
 
 	Node localhost
 	{
+		LocalConfigurationManager {
+			RebootNodeIfNeeded = $true
+		}
+
 		xRemoteFile ConfigJson {
 			Uri = "$artifactsLocation/wsfront/WSMISettings.json$artifactsLocationSasToken"
 			DestinationPath = $wsjson
@@ -251,7 +255,7 @@ Configuration WSFront
 
 		cChocoPackageInstaller nodejs
 		{
-			Name = "nodejs.install"
+			Name = "nodejs-lts"
 			Ensure = "Present"
 			DependsOn   = "[cChocoPackageInstaller]vcredist2013"
 		}
@@ -367,6 +371,10 @@ Configuration WSBack
 
 	Node localhost
 	{
+		LocalConfigurationManager {
+			RebootNodeIfNeeded = $true
+		}
+
 		xRemoteFile ConfigJson {
 			Uri = "$artifactsLocation/wsback/WSMISettings.json$artifactsLocationSasToken"
 			DestinationPath = $wsjson
