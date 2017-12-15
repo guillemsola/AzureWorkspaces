@@ -45,4 +45,5 @@ Else {
 	Write-Log "WS installed with code $($res.ExitCode)"
 }
 
-Write-Log "All done."
+Write-Log "All done, restarting..."
+Restart-Computer -ComputerName "localhost" -Force
