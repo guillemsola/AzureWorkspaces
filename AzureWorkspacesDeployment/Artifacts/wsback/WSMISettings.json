@@ -46,7 +46,7 @@
     "ServiceProviderCertificate": null,
     "IdentityProviderCertificateThumbprint": null,
     "QE_WCF_PublicPort": "8081",
-    "QE_WCF_PublicHost": "WSFront.ws.local",
+    "QE_WCF_PublicHost": "WSFront-0.ws.local",
     "QE_REST_PublicHost": "*",
     "QE_REST_PublicPort": "8880",
     "QE_REST_PublicUrl": "WSBack.ws.local:8880",

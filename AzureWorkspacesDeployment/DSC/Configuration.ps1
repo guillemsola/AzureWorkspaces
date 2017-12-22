@@ -5,6 +5,7 @@
 $InstallFolder = "C:\Install"
 $BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications"
 $BinariesVersion = "1.6.0"
+#$BinariesVersion = "master"
 $NetworkService  = "NT AUTHORITY\NETWORK SERVICE"
 
 $confData = @{
@@ -210,6 +211,14 @@ Configuration WSFront
             Type   = 'Text'
             Text   = $user
 			DependsOn = "[ReplaceText]replacePassword"
+		}
+		
+		ReplaceText replaceHostname {
+			Path   = $wsjson
+            Search = '%hostname%'
+            Type   = 'Text'
+            Text   = $env:COMPUTERNAME
+			DependsOn = "[ReplaceText]replaceUser"
 		}
 
 		xRemoteFile Workspace {

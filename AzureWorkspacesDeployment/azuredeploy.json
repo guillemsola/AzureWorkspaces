@@ -62,11 +62,25 @@
         "description": "The default size applied for virtual machines."
       },
       "defaultValue": "Standard_A2"
+    },
+    "NumberOfInstances": {
+      "type": "int",
+      "metadata": {
+        "description": "Number of WS Portal instances"
+      },
+      "defaultvalue": 2
     }
   },
   "variables": {
     "NSGName": "WSVNET-NSG",
     "DCVMName": "DC-01",
+    "availabilitySetName": "PortalAvSet",
+    "portalLoabBalancerName": "PortalLoadBalancer",
+    "PortalLblid": "[resourceId('Microsoft.Network/loadBalancers', variables('portalLoabBalancerName'))]",
+    "frontEndIPConfigID": "[concat(variables('PortalLblid'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+    "PortalBackendPoolName": "PortalBackendPool1",
+    "lbPoolID": "[concat(variables('PortalLblid'),'/backendAddressPools/', variables('PortalBackendPoolName'))]",
+    "lbProbeID": "[concat(variables('PortalLblid'),'/probes/tcpProbe')]",
     "WSFrontVMName": "WSFront",
     "WSBackVMName": "WSBack",
     "SQLVMName": "SQL",
@@ -115,6 +129,37 @@
     },
     {
       "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('DCpublicIPAddressName')]",
+      "apiVersion": "2016-03-30",
+      "tags": {
+        "displayName": "DC Public IP"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('dnsPrefix'), '-dc')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/availabilitySets",
+      "name": "[variables('availabilitySetName')]",
+      "apiVersion": "2017-03-30",
+      "tags": {
+        "displayName": "Portal availability Set"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "platformFaultDomainCount": "2",
+        "platformUpdateDomainCount": "2"
+      },
+      "sku": {
+        "name": "Aligned"
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
       "name": "[variables('WSPpublicIPAddressName')]",
       "apiVersion": "2016-03-30",
       "tags": {
@@ -126,6 +171,67 @@
         "dnsSettings": {
           "domainNameLabel": "[parameters('dnsPrefix')]"
         }
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "name": "[variables('portalLoabBalancerName')]",
+      "type": "Microsoft.Network/loadBalancers",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('WSPpublicIPAddressName'))]"
+      ],
+      "tags": {
+        "displayName": "Portal Load Balancer"
+      },
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "LoadBalancerFrontEnd",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName'))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "[variables('PortalBackendPoolName')]"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "LBWebPortalRule",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('frontEndIPConfigID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('lbPoolID')]"
+              },
+              "protocol": "tcp",
+              "frontendPort": 80,
+              "backendPort": 80,
+              "enableFloatingIP": false,
+              "idleTimeoutInMinutes": 5,
+              "probe": {
+                "id": "[variables('lbProbeID')]"
+              }
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "tcpProbe",
+            "properties": {
+              "protocol": "tcp",
+              "port": 80,
+              "intervalInSeconds": 5,
+              "numberOfProbes": 2
+            }
+          }
+        ]
       }
     },
     {
@@ -170,6 +276,9 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "[variables('DCIPAddress')]",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('DCpublicIPAddressName'))]"
+              },
               "subnet": {
                 "id": "[variables('DCSubnetRef')]"
               }
@@ -307,28 +416,33 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
-      "name": "[concat(variables('WSFrontVMName'), '-NIC')]",
+      "name": "[concat(variables('WSFrontVMName'), '-', copyindex(), '-NIC')]",
       "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "nicLoop",
+        "count": "[parameters('NumberOfInstances')]"
+      },
       "tags": {
         "displayName": "WS Front NIC"
       },
       "dependsOn": [
         "Microsoft.Resources/deployments/UpdateVNetDNS",
-        "[resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName'))]"
+        "[variables('portalLoabBalancerName')]"
       ],
       "properties": {
         "ipConfigurations": [
           {
             "name": "ipconfig1",
             "properties": {
-              "privateIPAllocationMethod": "Static",
-              "privateIPAddress": "10.0.0.8",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName'))]"
-              },
+              "privateIPAllocationMethod": "Dynamic",
               "subnet": {
                 "id": "[variables('DCSubnetRef')]"
-              }
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[concat(variables('PortalLblid'), '/backendAddressPools/', variables('PortalBackendPoolName'))]"
+                }
+              ]
             }
           }
         ],
@@ -342,20 +456,28 @@
     {
       "apiVersion": "2017-03-30",
       "type": "Microsoft.Compute/virtualMachines",
-      "name": "[variables('WSFrontVMName')]",
+      "name": "[concat(variables('WSFrontVMName'), '-', copyindex())]",
       "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "WSFrontLoop",
+        "count": "[parameters('NumberOfInstances')]"
+      },
       "tags": {
         "displayName": "WS Front"
       },
       "dependsOn": [
-        "[concat('Microsoft.Network/networkInterfaces/', variables('WSFrontVMName'), '-NIC')]"
+        "[concat('Microsoft.Network/networkInterfaces/', variables('WSFrontVMName'), '-', copyindex(), '-NIC')]",
+        "[concat('Microsoft.Compute/availabilitySets/', variables('availabilitySetName'))]"
       ],
       "properties": {
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets', variables('availabilitySetName'))]"
+        },
         "hardwareProfile": {
           "vmSize": "[parameters('VMSize')]"
         },
         "osProfile": {
-          "computerName": "[variables('WSFrontVMName')]",
+          "computerName": "[concat(variables('WSFrontVMName'), '-', copyindex())]",
           "adminUsername": "[parameters('adminUsername')]",
           "adminPassword": "[parameters('adminPassword')]",
           "windowsConfiguration": {
@@ -370,27 +492,27 @@
             "version": "latest"
           },
           "osDisk": {
-            "name": "[concat(variables('WSFrontVMName'), '-os-disk')]",
+            "name": "[concat(variables('WSFrontVMName'), '-', copyIndex(), '-os-disk')]",
             "createOption": "FromImage"
           }
         },
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('WSFrontVMName'), '-NIC'))]"
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('WSFrontVMName'), '-', copyindex(), '-NIC'))]"
             }
           ]
         }
       },
       "resources": [
         {
-          "name": "[concat(variables('WSFrontVMName'), '/joindomain')]",
+          "name": "[concat(variables('WSFrontVMName'), '-', copyIndex(), '/joindomain')]",
           "type": "Microsoft.Compute/virtualMachines/extensions",
           "comments": "Join domain - JsonADDomainExtension",
           "apiVersion": "2016-03-30",
           "location": "[resourceGroup().location]",
           "dependsOn": [
-            "[variables('WSFrontVMName')]"
+            "[concat(variables('WSFrontVMName'), '-', copyindex())]"
           ],
           "tags": {
             "displayName": "Join domain"
@@ -414,15 +536,15 @@
         },
         {
           "type": "extensions",
-          "name": "DSCConfiguration",
+          "name": "[concat('DSCConfiguration', '-', copyIndex())]",
           "apiVersion": "2015-06-15",
           "tags": {
             "displayName": "DSC Configuration"
           },
           "location": "[resourceGroup().location]",
           "dependsOn": [
-            "[variables('WSFrontVMName')]",
-            "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/joindomain')]",
+            "[concat(variables('WSFrontVMName'), '-', copyIndex())]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '-', copyIndex(), '/extensions/joindomain')]",
             "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/SqlIaasExtension')]"
           ],
           "properties": {
@@ -457,11 +579,14 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(variables('WSFrontVMName'), '/InstallWS')]",
+      "name": "[concat(variables('WSFrontVMName'), '-', copyIndex(), '/InstallWS')]",
       "location": "[resourceGroup().location]",
-      "condition":  "[equals('True', 'True')]",
+      "copy": {
+        "name": "WSFrontiNSTALLLoop",
+        "count": "[parameters('NumberOfInstances')]"
+      },
       "dependsOn": [
-        "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '/extensions/DSCConfiguration')]"
+        "[concat('DSCConfiguration', '-', copyIndex())]"
       ],
       "tags": {
         "displayName": "Install WS Front"
@@ -475,7 +600,7 @@
           "fileUris": [
             "[concat(parameters('_artifactsLocation'), '/wsfront/Install.ps1', parameters('_artifactsLocationSasToken'))]"
           ],
-          "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File install.ps1"
+          "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File wsfront/install.ps1"
         }
       }
     },
@@ -882,21 +1007,21 @@
               "sourceAddressPrefix": "*",
               "destinationAddressPrefix": "*",
               "access": "Allow",
-              "priority": 115,
+              "priority": 120,
               "direction": "Inbound"
             }
           },
           {
             "name": "enable_web_rule",
             "properties": {
-              "description": "Enable Internet to [variables('WSFront')]",
-              "protocol": "Tcp",
+              "description": "Portal web access",
+              "protocol": "*",
               "sourcePortRange": "*",
               "destinationPortRange": "80",
-              "sourceAddressPrefix": "Internet",
-              "destinationAddressPrefix": "10.0.0.8",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
               "access": "Allow",
-              "priority": 120,
+              "priority": 130,
               "direction": "Inbound"
             }
           },
