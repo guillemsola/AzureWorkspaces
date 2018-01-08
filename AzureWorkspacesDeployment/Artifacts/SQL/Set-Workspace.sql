@@ -58,3 +58,45 @@ EXEC sp_addrolemember N'db_owner', N'ConsoleUser';
 EXEC sp_addrolemember N'db_securityadmin', N'ConsoleUser';
 GO
 
+
+CREATE DATABASE CloudRobotWorkflowInstanceStore; 
+GO
+
+CREATE LOGIN CloudRobotInstanceStoreAdmin
+WITH PASSWORD = 'workspace2017!', 
+DEFAULT_DATABASE = CloudRobotWorkflowInstanceStore, 
+CHECK_POLICY = OFF,
+CHECK_EXPIRATION = OFF;
+GO
+
+USE CloudRobotWorkflowInstanceStore
+
+CREATE USER CloudRobotInstanceStoreAdmin 
+ FOR LOGIN CloudRobotInstanceStoreAdmin; 
+
+EXEC sp_addrolemember N'db_owner', N'CloudRobotInstanceStoreAdmin';
+
+EXEC sp_addrolemember N'db_securityadmin', N'CloudRobotInstanceStoreAdmin';
+GO
+
+
+
+CREATE DATABASE AsgScheduler; 
+GO
+
+CREATE LOGIN SchedulerAdmin
+WITH PASSWORD = 'workspace2017!', 
+DEFAULT_DATABASE = AsgScheduler, 
+CHECK_POLICY = OFF,
+CHECK_EXPIRATION = OFF;
+GO
+
+USE AsgScheduler
+
+CREATE USER SchedulerAdmin 
+ FOR LOGIN SchedulerAdmin; 
+
+EXEC sp_addrolemember N'db_owner', N'SchedulerAdmin';
+
+EXEC sp_addrolemember N'db_securityadmin', N'SchedulerAdmin';
+GO
