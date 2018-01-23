@@ -35,6 +35,9 @@ Else {
 	Write-Log "Citrix installed with code $($res.ExitCode)"
 }
 
+$nodeVersion = node -v
+Write-Log("Node version: $nodeVersion")
+
 If (Test-Path -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ASG CloudRobot Encryption") {
 	Write-Log "WS already installed."
 }
@@ -45,5 +48,4 @@ Else {
 	Write-Log "WS installed with code $($res.ExitCode)"
 }
 
-Write-Log "All done, restarting..."
-Restart-Computer -ComputerName "localhost" -Force
+Write-Log "All done"

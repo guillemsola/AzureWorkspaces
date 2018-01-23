@@ -4,7 +4,7 @@
 
 $InstallFolder = "C:\Install"
 $BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications"
-$BinariesVersion = "1.6.0"
+$BinariesVersion = "release-10.0_SP7"
 #$BinariesVersion = "master"
 $NetworkService  = "NT AUTHORITY\NETWORK SERVICE"
 
@@ -283,6 +283,20 @@ Configuration WSFront
 			#Credential = New-Object -TypeName pscredential -ArgumentList $NetworkService, (new-object System.Security.SecureString)
 			DependsOn  = '[xRemoteFile]IISCertFile'
 		}
+
+		Script ForceReboot
+		{
+			TestScript = {
+				return (Test-Path HKLM:\SOFTWARE\AzureDSCProvisioning\RebootKey)
+			}
+			SetScript = {
+				New-Item -Path HKLM:\SOFTWARE\AzureDSCProvisioning\RebootKey -Force
+				 $global:DSCMachineStatus = 1 
+
+			}
+			GetScript = { return @{result = 'result'}}
+			DependsOn = @("[WindowsFeatureSet]WorkspaceDependencies", "[cChocoPackageInstaller]nodejs")
+		}    
 		
 		<#
 		Script InstallCitrixStoreFront
@@ -463,6 +477,8 @@ Configuration WSBack
 			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[ReplaceText]replaceUser")
 		}
 
+		# TODO If multiple front reference all QE in backend
+
 		Common NestedCommon {}
 
 		DevTools NestedDevTools {}
@@ -499,6 +515,7 @@ Configuration WSSQL
 			RestartService = $true
 		}
 
+		<#
 		xRemoteFile GetSqlScript{
 			Uri = "$artifactsLocation/SQL/Get-Workspace.sql$artifactsLocationSasToken"
 			DestinationPath = $getScript
@@ -526,6 +543,7 @@ Configuration WSSQL
             Variable       = @("FilePath=C:\temp\log\AuditFiles")
 			DependsOn = "[xRemoteFile]TestSqlScript"
         }
+		#>
 
 		Common NestedCommon {}
 	}
