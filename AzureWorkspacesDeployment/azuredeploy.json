@@ -25,7 +25,8 @@
       "type": "string",
       "metadata": {
         "description": "The DNS prefix for the public IP address used for the WS Portal website and server http://*dnsprefix*.westeurope.cloudapp.azure.com/Workspace/dashboard. The full DNS name has to be unique for each Azure region"
-      }
+      },
+      "defaultValue": "true"
     },
     "_artifactsLocation": {
       "type": "string",
@@ -68,7 +69,15 @@
       "metadata": {
         "description": "Number of WS Portal instances"
       },
-      "defaultvalue": 2
+      "defaultvalue": 1
+    },
+    "SplitPortalAndProvisioning": {
+      "type": "String",
+      "allowedValues": [ "Yes", "No" ],
+      "metadata": {
+        "description": "If enabled two different set of machines will be deployed for portal and provisioning services"
+      },
+      "defaultvalue": "No"
     }
   },
   "variables": {
@@ -110,7 +119,10 @@
     "sqlStorageDisksConfigurationType": "NEW",
     "sqlStorageStartingDeviceId": 2,
     "rServicesEnabled": "false",
-    "OuPath": "OU=Servers,DC=ws,DC=local"
+    "OuPath": "OU=Servers,DC=ws,DC=local",
+    "DCVMSize": "Basic_A1",
+    "SQLVMSize": "Basic_A1",
+    "RabbitVMSize": "Basic_A0"
   },
   "resources": [
     {
@@ -300,7 +312,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[variables('DCVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('DCVMName')]",
@@ -607,6 +619,7 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
+      "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
       "name": "[concat(variables('WSBackVMName'), '-NIC')]",
       "location": "[resourceGroup().location]",
       "tags": {
@@ -639,6 +652,7 @@
       "type": "Microsoft.Compute/virtualMachines",
       "name": "[variables('WSBackVMName')]",
       "location": "[resourceGroup().location]",
+      "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
       "tags": {
         "displayName": "WS Back"
       },
@@ -681,6 +695,7 @@
         {
           "name": "[concat(variables('WSBackVMName'), '/joindomain')]",
           "type": "Microsoft.Compute/virtualMachines/extensions",
+          "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
           "comments": "Join domain - JsonADDomainExtension",
           "apiVersion": "2016-03-30",
           "location": "[resourceGroup().location]",
@@ -710,6 +725,7 @@
         {
           "type": "extensions",
           "name": "DSCConfiguration",
+          "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
           "apiVersion": "2015-06-15",
           "tags": {
             "displayName": "DSC Configuration"
@@ -792,7 +808,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[variables('SQLVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('SQLVMName')]",
@@ -1081,7 +1097,7 @@
       },
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[variables('RabbitVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('RabbitMQVMName')]",

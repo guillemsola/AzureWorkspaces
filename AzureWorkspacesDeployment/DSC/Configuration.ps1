@@ -185,7 +185,7 @@ Configuration WSFront
 		}
 
 		xRemoteFile ConfigJson {
-			Uri = "$artifactsLocation/wsfront/WSMISettings.json$artifactsLocationSasToken"
+			Uri = "$artifactsLocation/wsfront/WSMISettingsMin.json$artifactsLocationSasToken"
 			DestinationPath = $wsjson
 		}
 
