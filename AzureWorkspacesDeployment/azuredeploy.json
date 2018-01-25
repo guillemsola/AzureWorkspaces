@@ -60,7 +60,7 @@
         "Standard_D2_v2"
       ],
       "metadata": {
-        "description": "The default size applied for virtual machines."
+        "description": "The default size applied for WS Portal virtual machines."
       },
       "defaultValue": "Standard_A2"
     },
@@ -72,12 +72,20 @@
       "defaultvalue": 1
     },
     "SplitPortalAndProvisioning": {
-      "type": "String",
+      "type": "string",
       "allowedValues": [ "Yes", "No" ],
       "metadata": {
         "description": "If enabled two different set of machines will be deployed for portal and provisioning services"
       },
       "defaultvalue": "No"
+    },
+    "SQLServerSKU": {
+      "type": "string",
+      "allowedValues": [ "Express", "SQLDEV" ],
+      "metadata": {
+        "description": "Type of SQL Server SKU to deploy"
+      },
+      "defaultvalue": "SQLDEV"
     }
   },
   "variables": {
@@ -822,7 +830,7 @@
           "imageReference": {
             "publisher": "MicrosoftSQLServer",
             "offer": "SQL2016SP1-WS2016",
-            "sku": "SQLDEV",
+            "sku": "[parameters('SQLServerSKU')]",
             "version": "latest"
           },
           "osDisk": {

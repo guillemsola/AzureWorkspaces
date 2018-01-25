@@ -113,7 +113,7 @@ Configuration DevTools
 	{
 		InstallDir = "c:\choco"
 	}
-	<#
+	
 	cChocoPackageInstallerSet Tools
 	{
 		Name = @(
@@ -124,7 +124,6 @@ Configuration DevTools
 		DependsOn = "[cChocoInstaller]installChoco"
 		Ensure = "Present"
 	}
-	#>
 }
 
 Configuration AddRootCA
