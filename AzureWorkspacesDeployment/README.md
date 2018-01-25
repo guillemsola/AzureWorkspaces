@@ -14,6 +14,10 @@ Click the button below to deploy
     <img src="http://armviz.io/visualizebutton.png"/>
 </a>
 
+## Issue with executing a PS1 script
+
+I have detected that while deploying from PS console the custom script extensions, when working with several folders work differently see https://github.com/Azure/azure-powershell/issues/5126
+
 ## DSC With secured parameters
 
 Reference in case this scenario is needed
