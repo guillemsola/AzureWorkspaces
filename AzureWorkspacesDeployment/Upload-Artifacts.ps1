@@ -17,7 +17,7 @@ function DownloadFromArtifactory($component, $revision)
     $url = "https://bin-eu.asg.com/artifactory/DHW-Dev/Workspaces/$component/$revision-SNAPSHOT/$component-$revision-SNAPSHOT.zip"
     # Get latest snapshot buildid
     $latestSnapshotName = $wc.DownloadString("https://bin-eu.asg.com/artifactory/api/search/latestVersion?g=Workspaces&a=$component&v=$revision-SNAPSHOT")
-    $artifactInfo = $wc.DownloadString("https://bin-eu.asg.com/artifactory/api/storage//DHW-Dev/Workspaces/$component/master-SNAPSHOT/$component-$latestSnapshotName.zip?properties=build.number") | ConvertFrom-Json
+    $artifactInfo = $wc.DownloadString("https://bin-eu.asg.com/artifactory/DHW-Dev/Workspaces/$component/$revision-SNAPSHOT/$component-$latestSnapshotName.zip?properties=build.number") | ConvertFrom-Json
     $output.buildId = $artifactInfo.properties.'build.number'
 	
     Write-Host "Detected artifact $latestSnapshotName from build $($output.buildId) for $component"

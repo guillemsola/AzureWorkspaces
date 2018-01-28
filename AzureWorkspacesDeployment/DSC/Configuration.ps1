@@ -4,8 +4,6 @@
 
 $InstallFolder = "C:\Install"
 $BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications"
-$BinariesVersion = "release-10.0_SP7"
-#$BinariesVersion = "master"
 $NetworkService  = "NT AUTHORITY\NETWORK SERVICE"
 
 $confData = @{
@@ -19,11 +17,17 @@ $confData = @{
 
 configuration Common 
 { 
-    Import-DscResource -ModuleName PSDesiredStateConfiguration
+    Import-DscResource -ModuleName PSDesiredStateConfiguration, xSystemSecurity
 
 	LocalConfigurationManager
 	{
 		RebootNodeIfNeeded = $true
+	}
+
+	xIEEsc DisableIEEsc
+	{
+		IsEnabled = $false
+		UserRole = "Administrators"
 	}
 
 	<#Service ModulesInstaller {
@@ -167,10 +171,17 @@ Configuration WSFront
 		[string] $user,
 		[Parameter(Mandatory)]
 		[string] $pwd,
-		[string] $wsFqdn
+		[string] $wsFqdn,
+		[string] $SplitPortalAndProvisioning,
+		[Parameter(Mandatory)]
+		[string] $BinariesVersion
 	)
 
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco, xCertificate, FileContentDSC
+	if ($SplitPortalAndProvisioning -eq "No") {
+		$configFile = "Compact"
+	}
+	$configArtifact = "$artifactsLocation/wsfront/WSMISettings$configFile.json$artifactsLocationSasToken"
 	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
 	$iisCert = Join-Path -Path $InstallFolder -ChildPath "ws.local.pfx"
 	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
@@ -184,7 +195,7 @@ Configuration WSFront
 		}
 
 		xRemoteFile ConfigJson {
-			Uri = "$artifactsLocation/wsfront/WSMISettingsMin.json$artifactsLocationSasToken"
+			Uri = $configArtifact
 			DestinationPath = $wsjson
 		}
 
@@ -383,7 +394,9 @@ Configuration WSBack
 		[Parameter(Mandatory)]
 		[string] $user,
 		[Parameter(Mandatory)]
-		[string] $pwd
+		[string] $pwd,
+		[Parameter(Mandatory)]
+		[string] $BinariesVersion
 	)
 
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, FileContentDSC
@@ -494,7 +507,8 @@ Configuration WSSQL
 		[Parameter(Mandatory)]
 		[string] $TcpPort,
 		[Parameter(Mandatory)]
-		[PSCredential] $SqlCredential
+		[PSCredential] $SqlCredential,
+		[string] $SQLServerSKU
 	)
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, xSqlServer
 
@@ -502,11 +516,19 @@ Configuration WSSQL
 	$setScript = Join-Path -Path $InstallFolder -ChildPath "Set-Workspace.sql"
 	$testScript = Join-Path -Path $InstallFolder -ChildPath "Test-Workspace.sql"
 
+	If($SQLSercerSKU -eq "Express") {
+		$instanceName = "SQLExpress"
+	}
+	Else {
+		$instanceName = "MSSQLSERVER"
+	}
+
+	#SQLExpress
 	Node localhost
 	{
 		xSQLServerNetwork ChangeTcpIpOnDefaultInstance
 		{
-			InstanceName = "MSSQLSERVER"
+			InstanceName = $instanceName
 			ProtocolName = "Tcp"
 			IsEnabled = $true
 			TcpDynamicPort = $false
@@ -514,10 +536,11 @@ Configuration WSSQL
 			RestartService = $true
 		}
 
-		<#
+		
 		xRemoteFile GetSqlScript{
 			Uri = "$artifactsLocation/SQL/Get-Workspace.sql$artifactsLocationSasToken"
 			DestinationPath = $getScript
+			DependsOn = "[xSQLServerNetwork]ChangeTcpIpOnDefaultInstance"
 		}
 
 		xRemoteFile SetSqlScript{
@@ -542,7 +565,6 @@ Configuration WSSQL
             Variable       = @("FilePath=C:\temp\log\AuditFiles")
 			DependsOn = "[xRemoteFile]TestSqlScript"
         }
-		#>
 
 		Common NestedCommon {}
 	}
