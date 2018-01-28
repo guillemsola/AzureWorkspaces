@@ -100,3 +100,24 @@ EXEC sp_addrolemember N'db_owner', N'SchedulerAdmin';
 
 EXEC sp_addrolemember N'db_securityadmin', N'SchedulerAdmin';
 GO
+
+CREATE DATABASE RepositoryDB; 
+GO
+
+CREATE LOGIN Robot
+WITH PASSWORD = 'workspace2017!', 
+DEFAULT_DATABASE = RepositoryDB, 
+CHECK_POLICY = OFF,
+CHECK_EXPIRATION = OFF;
+GO
+
+USE RepositoryDB
+
+CREATE USER Robot 
+ FOR LOGIN Robot; 
+
+EXEC sp_addrolemember N'db_owner', N'Robot';
+
+EXEC sp_addrolemember N'db_securityadmin', N'Robot';
+GO
+

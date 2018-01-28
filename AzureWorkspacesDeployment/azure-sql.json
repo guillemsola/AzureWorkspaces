@@ -1,0 +1,151 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminUsername": {
+      "type": "string"
+    },
+    "adminPassword": {
+      "type": "securestring"
+    },
+    "DatabaseCollation": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "SQL_Latin1_General_CP1_CI_AS"
+    },
+    "WorkspaceEdition": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "allowedValues": [
+        "Basic",
+        "Standard",
+        "Premium"
+      ]
+    },
+    "WorkspaceRequestedServiceObjectiveName": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "allowedValues": [
+        "Basic",
+        "S0",
+        "S1",
+        "S2",
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "metadata": {
+        "description": "Describes the performance level for Edition"
+      }
+    }
+  },
+  "variables": {
+    "sqlserverdatabase-Name": "[concat('sqlserverdatabase-gsa2', uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "name": "[variables('sqlserverdatabase-Name')]",
+      "type": "Microsoft.Sql/servers",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2014-04-01-preview",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "SQL Server Database"
+      },
+      "properties": {
+        "administratorLogin": "[parameters('adminUsername')]",
+        "administratorLoginPassword": "[parameters('adminPassword')]"
+      },
+      "resources": [
+        {
+          "name": "Allow all Azure IP",
+          "type": "firewallrules",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.Sql/servers', variables('sqlserverdatabase-Name'))]"
+          ],
+          "properties": {
+            "startIpAddress": "0.0.0.0",
+            "endIpAddress": "0.0.0.0"
+          }
+        },
+        {
+          "name": "Workspace",
+          "type": "databases",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.Sql/servers', variables('sqlserverdatabase-Name'))]"
+          ],
+          "properties": {
+            "collation": "[parameters('DatabaseCollation')]",
+            "edition": "[parameters('WorkspaceEdition')]",
+            "maxSizeBytes": "524288000",
+            "requestedServiceObjectiveName": "[parameters('WorkspaceRequestedServiceObjectiveName')]"
+          }
+        },
+        {
+          "name": "WorkspaceConsole",
+          "type": "databases",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.Sql/servers', variables('sqlserverdatabase-Name'))]"
+          ],
+          "properties": {
+            "collation": "[parameters('DatabaseCollation')]",
+            "edition": "[parameters('WorkspaceEdition')]",
+            "maxSizeBytes": "524288000",
+            "requestedServiceObjectiveName": "[parameters('WorkspaceRequestedServiceObjectiveName')]"
+          }
+        },
+        {
+          "name": "CloudRobotWorkflowInstanceStore",
+          "type": "databases",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.Sql/servers', variables('sqlserverdatabase-Name'))]"
+          ],
+          "properties": {
+            "collation": "[parameters('DatabaseCollation')]",
+            "edition": "[parameters('WorkspaceEdition')]",
+            "maxSizeBytes": "524288000",
+            "requestedServiceObjectiveName": "[parameters('WorkspaceRequestedServiceObjectiveName')]"
+          }
+        },
+        {
+          "name": "AsgScheduler",
+          "type": "databases",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.Sql/servers', variables('sqlserverdatabase-Name'))]"
+          ],
+          "properties": {
+            "collation": "[parameters('DatabaseCollation')]",
+            "edition": "[parameters('WorkspaceEdition')]",
+            "maxSizeBytes": "524288000",
+            "requestedServiceObjectiveName": "[parameters('WorkspaceRequestedServiceObjectiveName')]"
+          }
+        },
+        {
+          "name": "RepositoryDB",
+          "type": "databases",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.Sql/servers', variables('sqlserverdatabase-Name'))]"
+          ],
+          "properties": {
+            "collation": "[parameters('DatabaseCollation')]",
+            "edition": "[parameters('WorkspaceEdition')]",
+            "maxSizeBytes": "524288000",
+            "requestedServiceObjectiveName": "[parameters('WorkspaceRequestedServiceObjectiveName')]"
+          }
+        }
+      ]
+    }
+  ]
+}

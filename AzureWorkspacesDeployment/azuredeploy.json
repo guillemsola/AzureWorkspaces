@@ -25,7 +25,15 @@
       "type": "string",
       "metadata": {
         "description": "The DNS prefix for the public IP address used for the WS Portal website and server http://*dnsprefix*.westeurope.cloudapp.azure.com/Workspace/dashboard. The full DNS name has to be unique for each Azure region"
-      }
+      },
+      "defaultValue": "true"
+    },
+    "BinariesVersion": {
+      "type": "string",
+      "metadata": {
+        "description": "The Workspaces version to install, ie: 10.0.6, release-10.0_SP7, master..."
+      },
+      "defaultValue": "release-10.0_SP7"
     },
     "_artifactsLocation": {
       "type": "string",
@@ -48,7 +56,7 @@
       },
       "defaultValue": ""
     },
-    "VMSize": {
+    "WSVMSize": {
       "type": "string",
       "allowedValues": [
         "Standard_F2",
@@ -59,16 +67,73 @@
         "Standard_D2_v2"
       ],
       "metadata": {
-        "description": "The default size applied for virtual machines."
+        "description": "The default size applied for WS Portal virtual machines."
       },
       "defaultValue": "Standard_A2"
+    },
+    "InfraVMSize": {
+      "type": "string",
+      "allowedValues": [
+        "Basic_A0",
+        "Basic_A1",
+        "Basic_A2",
+        "Basic_A3",
+        "Standard_F2",
+        "Standard_F4",
+        "Standard_A1",
+        "Standard_A2",
+        "Standard_A4",
+        "Standard_D2_v2"
+      ],
+      "metadata": {
+        "description": "The default size applied for DC, SQL, Rabbit virtual machines."
+      },
+      "defaultValue": "Standard_A1"
     },
     "NumberOfInstances": {
       "type": "int",
       "metadata": {
         "description": "Number of WS Portal instances"
       },
-      "defaultvalue": 2
+      "defaultvalue": 1
+    },
+    "SplitPortalAndProvisioning": {
+      "type": "string",
+      "allowedValues": [ "Yes", "No" ],
+      "metadata": {
+        "description": "If enabled two different set of machines will be deployed for portal and provisioning services"
+      },
+      "defaultvalue": "Yes"
+    },
+    "SQLServerSKU": {
+      "type": "string",
+      "allowedValues": [ "Express", "SQLDEV" ],
+      "metadata": {
+        "description": "Type of SQL Server SKU to deploy"
+      },
+      "defaultvalue": "SQLDEV"
+    },
+    "AutoShutdownStatus": {
+      "type": "string",
+      "allowedValues": [ "Enabled", "Disabled" ],
+      "metadata": {
+        "description": "Auto shutdown portal machine."
+      },
+      "defaultvalue": "Enabled"
+    },
+    "AutoShutdownTime": {
+      "type": "string",
+      "metadata": {
+        "description": "Time to shutdown machine"
+      },
+      "defaultvalue": "1900"
+    },
+    "AutoShutdownTimeZone": {
+      "type": "string",
+      "metadata": {
+        "description": "Time zone id https://msdn.microsoft.com/en-us/library/gg154758.aspx."
+      },
+      "defaultvalue": "Romance Standard Time"
     }
   },
   "variables": {
@@ -110,7 +175,10 @@
     "sqlStorageDisksConfigurationType": "NEW",
     "sqlStorageStartingDeviceId": 2,
     "rServicesEnabled": "false",
-    "OuPath": "OU=Servers,DC=ws,DC=local"
+    "OuPath": "OU=Servers,DC=ws,DC=local",
+    "DCVMSize": "[parameters('InfraVMSize')]",
+    "SQLVMSize": "[parameters('InfraVMSize')]",
+    "RabbitVMSize": "[parameters('InfraVMSize')]"
   },
   "resources": [
     {
@@ -145,7 +213,7 @@
     {
       "type": "Microsoft.Compute/availabilitySets",
       "name": "[variables('availabilitySetName')]",
-      "apiVersion": "2017-03-30",
+      "apiVersion": "2017-12-01",
       "tags": {
         "displayName": "Portal availability Set"
       },
@@ -210,7 +278,7 @@
               "backendAddressPool": {
                 "id": "[variables('lbPoolID')]"
               },
-              "protocol": "tcp",
+              "protocol": "Tcp",
               "frontendPort": 80,
               "backendPort": 80,
               "enableFloatingIP": false,
@@ -300,7 +368,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[variables('DCVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('DCVMName')]",
@@ -378,6 +446,31 @@
           }
         }
       ]
+    },
+    {
+      "name": "[concat('shutdown-computevm-', variables('DCVMName'))]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2016-05-15",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "DC AutoShutdown"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('DCVMName'))]"
+      ],
+      "properties": {
+        "status": "[parameters('AutoShutdownStatus')]",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[parameters('AutoShutdownTime')]"
+        },
+        "timeZoneId": "[parameters('AutoShutdownTimeZone')]",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('DCVMName'))]",
+        "notificationSettings": {
+          "status": "Disabled",
+          "timeInMinutes": 30
+        }
+      }
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -474,7 +567,7 @@
           "id": "[resourceId('Microsoft.Compute/availabilitySets', variables('availabilitySetName'))]"
         },
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[parameters('WSVMSize')]"
         },
         "osProfile": {
           "computerName": "[concat(variables('WSFrontVMName'), '-', copyindex())]",
@@ -562,7 +655,9 @@
                 "artifactsLocation": "[parameters('_artifactsLocation')]",
                 "user": "[parameters('adminUsername')]",
                 "pwd": "[parameters('adminPassword')]",
-                "wsFqdn": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn]"
+                "wsFqdn": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn]",
+                "SplitPortalAndProvisioning": "[parameters('SplitPortalAndProvisioning')]",
+                "BinariesVersion": "[parameters('BinariesVersion')]"
               }
             },
             "protectedSettings": {
@@ -575,6 +670,35 @@
           }
         }
       ]
+    },
+    {
+      "name": "[concat('shutdown-computevm-', variables('WSFrontVMName'), '-', copyIndex())]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2016-05-15",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "WSFrontScheduleLoop",
+        "count": "[parameters('NumberOfInstances')]"
+      },
+      "tags": {
+        "displayName": "WS Front AutoShutdown"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('WSFrontVMName'), '-', copyindex())]"
+      ],
+      "properties": {
+        "status": "[parameters('AutoShutdownStatus')]",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[parameters('AutoShutdownTime')]"
+        },
+        "timeZoneId": "[parameters('AutoShutdownTimeZone')]",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', concat(variables('WSFrontVMName'), '-', copyindex()))]",
+        "notificationSettings": {
+          "status": "Disabled",
+          "timeInMinutes": 30
+        }
+      }
     },
     {
       "apiVersion": "2015-06-15",
@@ -607,6 +731,7 @@
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
+      "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
       "name": "[concat(variables('WSBackVMName'), '-NIC')]",
       "location": "[resourceGroup().location]",
       "tags": {
@@ -639,6 +764,7 @@
       "type": "Microsoft.Compute/virtualMachines",
       "name": "[variables('WSBackVMName')]",
       "location": "[resourceGroup().location]",
+      "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
       "tags": {
         "displayName": "WS Back"
       },
@@ -647,7 +773,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[parameters('WSVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('WSBackVMName')]",
@@ -681,6 +807,7 @@
         {
           "name": "[concat(variables('WSBackVMName'), '/joindomain')]",
           "type": "Microsoft.Compute/virtualMachines/extensions",
+          "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
           "comments": "Join domain - JsonADDomainExtension",
           "apiVersion": "2016-03-30",
           "location": "[resourceGroup().location]",
@@ -710,6 +837,7 @@
         {
           "type": "extensions",
           "name": "DSCConfiguration",
+          "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
           "apiVersion": "2015-06-15",
           "tags": {
             "displayName": "DSC Configuration"
@@ -735,7 +863,8 @@
               "configurationArguments": {
                 "artifactsLocation": "[parameters('_artifactsLocation')]",
                 "user": "[parameters('adminUsername')]",
-                "pwd": "[parameters('adminPassword')]"
+                "pwd": "[parameters('adminPassword')]",
+                "BinariesVersion": "[parameters('BinariesVersion')]"
               }
             },
             "protectedSettings": {
@@ -748,6 +877,32 @@
           }
         }
       ]
+    },
+    {
+      "name": "[concat('shutdown-computevm-', variables('WSBackVMName'))]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2016-05-15",
+      "location": "[resourceGroup().location]",
+      "condition": "[equals(parameters('SplitPortalAndProvisioning'), 'Yes')]",
+      "tags": {
+        "displayName": "WS Back AutoShutdown"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('WSBackVMName'))]"
+      ],
+      "properties": {
+        "status": "[parameters('AutoShutdownStatus')]",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[parameters('AutoShutdownTime')]"
+        },
+        "timeZoneId": "[parameters('AutoShutdownTimeZone')]",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('WSBackVMName'))]",
+        "notificationSettings": {
+          "status": "Disabled",
+          "timeInMinutes": 30
+        }
+      }
     },
     {
       "apiVersion": "2015-06-15",
@@ -792,7 +947,7 @@
       ],
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[variables('SQLVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('SQLVMName')]",
@@ -806,7 +961,7 @@
           "imageReference": {
             "publisher": "MicrosoftSQLServer",
             "offer": "SQL2016SP1-WS2016",
-            "sku": "SQLDEV",
+            "sku": "[parameters('SQLServerSKU')]",
             "version": "latest"
           },
           "osDisk": {
@@ -886,7 +1041,8 @@
               },
               "configurationArguments": {
                 "artifactsLocation": "[parameters('_artifactsLocation')]",
-                "TcpPort": "[variables('sqlPortNumber')]"
+                "TcpPort": "[variables('sqlPortNumber')]",
+                "SQLServerSKU": "[parameters('SQLServerSKU')]"
               }
             },
             "protectedSettings": {
@@ -1081,7 +1237,7 @@
       },
       "properties": {
         "hardwareProfile": {
-          "vmSize": "[parameters('VMSize')]"
+          "vmSize": "[variables('RabbitVMSize')]"
         },
         "osProfile": {
           "computerName": "[variables('RabbitMQVMName')]",
@@ -1109,6 +1265,31 @@
               "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('RabbitMQVMName'), '-NIC'))]"
             }
           ]
+        }
+      }
+    },
+    {
+      "name": "[concat('shutdown-computevm-', variables('RabbitMQVMName'))]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2016-05-15",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "RabbitMQ AutoShutdown"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('RabbitMQVMName'))]"
+      ],
+      "properties": {
+        "status": "[parameters('AutoShutdownStatus')]",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[parameters('AutoShutdownTime')]"
+        },
+        "timeZoneId": "[parameters('AutoShutdownTimeZone')]",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('RabbitMQVMName'))]",
+        "notificationSettings": {
+          "status": "Disabled",
+          "timeInMinutes": 30
         }
       }
     },

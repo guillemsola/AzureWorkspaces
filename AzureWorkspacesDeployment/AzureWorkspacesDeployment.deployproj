@@ -37,9 +37,11 @@
     <None Include="Artifacts\wsback\WSMISettings.json" />
     <None Include="Artifacts\ws.local.pfx" />
     <None Include="Artifacts\wsfront\Install.ps1" />
+    <None Include="Artifacts\wsfront\WSMISettingsCompact.json" />
     <None Include="Artifacts\wsfront\WSMISettings.json" />
     <None Include="Artifacts\wslfront\device.key" />
     <None Include="Artifacts\wslfront\wslfront.crt" />
+    <None Include="azure-sql.json" />
     <None Include="cert\device.key" />
     <None Include="cert\rootCA.key" />
     <None Include="cert\rootCA.pem" />

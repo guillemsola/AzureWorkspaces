@@ -1,0 +1,234 @@
+{
+  "UserParams": {
+    "CertificateInstallationSuccessfull": false,
+    "RegisterWSLResultImageSuccessfull": false,
+    "SilentMode": false,
+    "UninstallMode": false,
+    "GenerateInputFileOnly": false,
+    "InstallerPath": "C:\\Install",
+    "InstallDir": "C:\\Program Files\\ASG Workspaces\\",
+    "InstallMode": [ 0 ],
+    "LicenseAccept": true,
+    "MongoServerHostName": "%hostname%.ws.local",
+    "MongoConnectionString": "%hostname%.ws.local:27017",
+    "MongoServerHostPort": "27017",
+    "MongoUserName": null,
+    "MongoPassword": null,
+    "MongoDatabaseName": null,
+    "MongoDBNewOrExistingChoice": 0,
+    "SQLServerHostName": "sql.ws.local",
+    "SQLServerUserName": "%user%",
+    "SQLServerPassword": "%password%",
+    "SQLServerDatabaseName": null,
+    "SQLServerUserIntegratedAuthentication": 1,
+    "DBNewOrExistingChoice": 0,
+    "ADDomainControler": "DC-01.ws.local",
+    "DomainName": "DC=ws,DC=local",
+    "ADUserName": "%user%",
+    "ADPassword": "%password%",
+    "ADOrganizationEntity": null,
+    "ADDistinguishedName": "DC=ws,DC=local",
+    "ADPort": "389",
+    "ADSSL": false,
+    "RabbitMQHostName": "10.0.0.200",
+    "RabbitMQHostPort": "5672",
+    "RabbitMQUser": "portal",
+    "RabbitMQPassword": "workspace2017!",
+    "RabbitMQQueueName": "Workspace",
+    "CertificatesSource": 0,
+    "IdentityProviderType": 0,
+    "CockpitLoginUrl": null,
+    "CockpitLogoutUrl": null,
+    "CockpitPublCertIDP": null,
+    "CockpitURL": "http://%hostname%.ws.local/AuthServices",
+    "CockpitAutoSSO": false,
+    "ServiceProviderCertificateThumbprint": "",
+    "ServiceProviderCertificate": null,
+    "IdentityProviderCertificateThumbprint": "",
+    "QE_WCF_PublicPort": "8081",
+    "QE_WCF_PublicHost": "%hostname%.ws.local",
+    "QE_REST_PublicHost": "*",
+    "QE_REST_PublicPort": "8880",
+    "QE_REST_PublicUrl": "%hostname%.ws.local:8880",
+    "QE_HTTP_HostListen": "%hostname%.ws.local",
+    "QE_WCF_HostListen": "%hostname%.ws.local",
+    "QEAgentPort": "8082",
+    "QEAgentHost": "%hostname%.ws.local",
+    "QEAgentSecurCertFindValue": null,
+    "QEAgentSecurContrSubjectName": null,
+    "QEAgentSecurUseSecurity": false,
+    "QEAgentSecurUseUnsafe": false,
+    "REC_PublicPort": "8090",
+    "REC_PublicHost": "%hostname%.ws.local",
+    "REA_CloudRobotInstanceId": "CloudRobot-001",
+    "REA_ControllerServerHost": null,
+    "REA_ControllerServerPort": "8090",
+    "BA_BusServer": "%hostname%.ws.local",
+    "BA_TargetInstanceId": "CloudRobot-001",
+    "BA_RemoteControlBaseAddr": "http://*:9100",
+    "IDB_DatabaseName": "CloudRobotWorkflowInstanceStore",
+    "IDB_InstanceStoreUser": "CloudRobotInstanceStoreAdmin",
+    "IDB_InstanceStoreUserPassword": "%password%",
+    "InstancingDatabaseMode": 0,
+    "SCH_ServiceAddress": "%hostname%.ws.local",
+    "SCH_DBName": "AsgScheduler",
+    "SCH_DBUserName": "SchedulerAdmin",
+    "SCH_DBUserPassword": "%password%",
+    "SCH_DatabaseMode": 0,
+    "WE_Server": "%hostname%.ws.local",
+    "ApprovalServer": "%hostname%.ws.local",
+    "SchedulerServer": "%hostname%.ws.local",
+    "WE_User": null,
+    "WE_UserPassword": null,
+    "WE_EnableInstancing": true,
+    "WE_UseLdapViaSsl": false,
+    "TD_DBServer": "%hostname%.ws.local",
+    "TD_DataBase": "CloudRobotWorkflowTrackingStore",
+    "TD_DBUser": "CloudRobotTrackingStoreAdmin",
+    "TD_DBUserPassword": "%password%",
+    "TD_TrackingMode": 0,
+    "TrackingDatabaseMode": 0,
+    "NotificationServer": "%hostname%.ws.local",
+    "NotifyMailAddress": null,
+    "RepBaseProviderName": null,
+    "RepBaseEnterpriseMode": true,
+    "RepBaseSupportMailAddress": null,
+    "RepBaseEntryOU": null,
+    "RepBaseHomeDirShare": null,
+    "RepBaseHomeDriveLetter": "C:\\",
+    "RepBaseTsProfileShare": null,
+    "RepositoryDBName": "RepositoryDB",
+    "RepositoryDBUser": "Robot",
+    "RepositoryDBPassword": "%password%",
+    "IISVD_WebSite": "Default Web Site",
+    "IISVD_VDir": "Workspace",
+    "SMTPConfig_Host": null,
+    "SMTPConfig_Port": null,
+    "SMTPConfig_UserName": null,
+    "SMTPConfig_Password": null,
+    "SMTPConfig_DefUserAccountSender": null,
+    "SMTPConfig_DefDomainAccountSender": null,
+    "SMTPConfig_EnabledSSL": false,
+    "SMTPConfig_DefCredentials": false,
+    "IDP_StoreURLBase": "http://%fqdn%/Workspace",
+    "IDP_LoginUrl": "http://%fqdn%/Workspace/LoginIdp/SSO",
+    "IDP_LogoutUrl": "http://%fqdn%/Workspace/SSOLogoutIdp",
+    "IDP_Certificate": "~/ExtCertificates/servman.idp.cer ",
+    "IDP_UseUPN": false,
+    "RootCred_RootUserDN": "CN=%user%,CN=Users,DC=ws,DC=local",
+    "RootCred_RootGroupDN": null,
+    "AddConfig_QEUrl": null,
+    "AddConfig_NotifServUrl": null,
+    "AddConfig_EncryptConfig": false,
+    "AddConfig_RabbitScaleOutEnabled": false,
+    "AddConfig_EnableOfferPurchMode": true,
+    "AddConfig_CatalogByDevice": false,
+    "AddConfig_DelUsersFromAD": false,
+    "SCH_REST_PublicHost": "*",
+    "SCH_REST_PublicPort": "5000",
+    "CS_FilterByUA": null,
+    "Error": null,
+    "WorkspaceDBAdminUser": "WSAdminweb",
+    "WorkspaceDBAdminPassword": "workspace2017!",
+    "WorkspaceDBUser": "WSUser",
+    "WorkspaceDBPassword": "workspace2017!",
+    "WorkspaceDBName": "Workspace",
+    "FarmName": "WorkspaceFarm",
+    "WebName": "workspace",
+    "ConsoleDBName": "WorkspaceConsole",
+    "ConsoleDBUser": "ConsoleUser",
+    "ConsoleDBPassword": "workspace2017!",
+    "StorefrontHtml5ClientVirtualDir": "HTML5Client",
+    "DefaultPublicUrl": "http://%fqdn%/Workspace",
+    "WorkflowEngineHost": "%hostname%.ws.local",
+    "RepositoryServer": "%hostname%.ws.local"
+  },
+	"SelectedOptions": [{
+		"Key": "BUS Adapter",
+		"Value": true
+	},
+	{
+		"Key": "Instancing Database",
+		"Value": true
+	},
+	{
+		"Key": "Query Engine Controller",
+		"Value": false
+	},
+	{
+		"Key": "Query Engine Agent",
+		"Value": true
+	},
+	{
+		"Key": "Repository Database Creation",
+		"Value": true
+	},
+	{
+		"Key": "Repository Base",
+		"Value": true
+	},
+	{
+		"Key": "Repository API",
+		"Value": true
+	},
+	{
+		"Key": "Routing Engine Agent",
+		"Value": false
+	},
+	{
+		"Key": "Routing Engine Controller",
+		"Value": false
+	},
+	{
+		"Key": "Scheduler",
+		"Value": true
+	},
+	{
+		"Key": "Studio",
+		"Value": true
+	},
+	{
+		"Key": "Tracking Database",
+		"Value": true
+	},
+	{
+		"Key": "Workflow Analyzer",
+		"Value": false
+	},
+	{
+		"Key": "Workflow Analyzer Website",
+		"Value": false
+	},
+	{
+		"Key": "Workflow Engine Core",
+		"Value": true
+	},
+	{
+		"Key": "Activities",
+		"Value": true
+	},
+	{
+		"Key": "Database",
+		"Value": true
+	},
+	{
+		"Key": "Portal",
+		"Value": true
+	},
+	{
+		"Key": "ASG CloudRobot Encryption",
+		"Value": false
+	},
+	{
+		"Key": "Admin Console",
+		"Value": true
+	},
+	{
+		"Key": "Admin Console Database",
+		"Value": true
+	},
+	{
+		"Key": "Copy Storefront Files",
+		"Value": true
+	}]
+}
