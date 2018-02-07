@@ -25,6 +25,7 @@
   <Import Condition=" Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Deployment\1.1\DeploymentProject.targets') " Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Deployment\1.1\DeploymentProject.targets" />
   <!-- vertag<:>end -->
   <ItemGroup>
+    <Content Include="azuredeployDSC.json" />
     <Content Include="custom.parameters.json" />
     <Content Include="azuredeployJmeter.json" />
     <Content Include="azuredeploy.parameters.json" />
@@ -781,6 +782,7 @@
     <None Include="DSC\xSystemSecurity\1.2.0.0\Tests\Unit\MSFT_xFileSystemAccessRule.tests.ps1" />
     <None Include="DSC\xSystemSecurity\1.2.0.0\xSystemSecurity.psd1" />
     <None Include="scripts\createUsers.ps1" />
+    <None Include="scripts\DecryptBackendConfigs.ps1" />
     <None Include="Upload-Artifacts.ps1" />
   </ItemGroup>
   <Target Name="GetReferenceAssemblyPaths" />

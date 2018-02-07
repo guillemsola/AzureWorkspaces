@@ -4,10 +4,10 @@
    ( 
         [Parameter(Mandatory)]
         [String]$DomainName,
-
         [Parameter(Mandatory)]
-        [System.Management.Automation.PSCredential]$Admincreds,
-
+        [System.Management.Automation.PSCredential] $Admincreds,
+		[Parameter(Mandatory)]
+        [System.Management.Automation.PSCredential] $DomainAdmincreds,
         [Int]$RetryCount=20,
         [Int]$RetryIntervalSec=30
     ) 
@@ -147,6 +147,17 @@
 		{
 			IsEnabled = $false
 			UserRole = "Administrators"
+		}
+
+		Registry DoNotOpenServerManagerAtLogon {
+			Ensure = "Present"
+			Key = "HKEY_CURRENT_USER\SOFTWARE\Microsoft\ServerManager"
+			ValueName = "DoNotOpenServerManagerAtLogon"
+			ValueData = "0x1"
+			ValueType = "Dword"
+			Hex = $true
+			Force = $true
+			PsDscRunAsCredential = $DomainAdmincreds
 		}
    }
 } 

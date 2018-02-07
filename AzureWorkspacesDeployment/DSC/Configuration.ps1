@@ -6,17 +6,13 @@ $InstallFolder = "C:\Install"
 $BinariesLocation = "https://appmirrorbinaries.file.core.windows.net/host-applications"
 $NetworkService  = "NT AUTHORITY\NETWORK SERVICE"
 
-$confData = @{
-    AllNodes = @(
-        @{
-            NodeName = 'localhost'
-            PSDscAllowPlainTextPassword = $true
-        }
-    )
-}
-
 configuration Common 
 { 
+	param(
+		[Parameter(Mandatory)]
+		[PSCredential] $AdminCreds
+	)
+
     Import-DscResource -ModuleName PSDesiredStateConfiguration, xSystemSecurity
 
 	LocalConfigurationManager
@@ -30,54 +26,27 @@ configuration Common
 		UserRole = "Administrators"
 	}
 
-	<#Service ModulesInstaller {
-		Name = "TrustedInstaller"
-		DisplayName = "Windows Modules Installer"
-		StartupType = "Manual"
-	}
-
-	Service WindowsUpdate {
-		DisplayName = "Windows Update"
-		Name = "wuauserv"
-		StartupType = "Disabled"
-		State = "Stopped"
-		DependsOn = "[Service]ModulesInstaller"
-	}
-
-	# https://msdn.microsoft.com/en-us/library/dd939844(v=ws.10).aspx
-	Registry WindowsUpdate {
-		Ensure = "Present"
-		Key = "HKLM:\SOFTWARE\Policies\Microsoft\Windows"
-		ValueName = "WindowsUpdate"
-	}
-
-	Registry WindowsUpdateAU {
-		Ensure = "Present"
-		Key = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
-		ValueName = "AU"
-		DependsOn = "[Registry]WindowsUpdate"
-	}
-
-	Registry NoAutoUpdate {
-		Ensure = "Present"
-		Key = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
-		ValueName = "NoAutoUpdate"
-		ValueData = 1
-		DependsOn = "[Registry]WindowsUpdateAU"
-	}#>
-
-	# http://techibee.com/sysadmins/disable-server-manager-startup-from-user-login-using-registry-and-group-policies/2076
 	Registry DoNotOpenServerManagerAtLogon {
 		Ensure = "Present"
-		Key = "HKLM:\SOFTWARE\Microsoft\ServerManager"
+		Key = "HKEY_CURRENT_USER\SOFTWARE\Microsoft\ServerManager"
 		ValueName = "DoNotOpenServerManagerAtLogon"
-		ValueData = 1
+		ValueData = "0x1"
+		ValueType = "Dword"
+		Hex = $true
+		Force = $true
+		PsDscRunAsCredential = $AdminCreds
 	}
 }
 
-Configuration FrontEnd 
+Configuration PortalFrontEnd 
 {
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, XNetworking
+
+	WindowsFeatureSet  WorkspaceDependencies {
+		Name = @("Web-Server", "Web-Basic-Auth", "Web-Http-Redirect", "Web-Windows-Auth", "Web-App-Dev", "Web-Net-Ext45", "Web-AppInit", "Web-Asp-Net45", "Web-Mgmt-Tools", "Web-Scripting-Tools", "NET-Framework-45-Features", "NET-Framework-Features", "NET-Framework-45-Core", "Web-WebSockets")
+		Ensure = "Present"
+		IncludeAllSubFeature = $True
+	}
 
 	xFirewall QueryEngineCtrl {
 		Name = "QueryEngineCtrl"
@@ -106,6 +75,54 @@ Configuration FrontEnd
 		Description = "Open ports for query agent"
 		Enabled = "True"
 		DependsOn = "[xFirewall]QueryEngineCtrl"
+	}
+}
+
+Configuration PortalBackend
+{
+	param(
+		[Parameter(Mandatory)]
+		[PSCredential] $AdminCreds
+	)
+
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xSmbShare
+
+	WindowsFeatureSet  WorkspaceDependencies {
+		Name = @("NET-Framework-Features", "NET-Framework-45-Core", "RSAT-AD-PowerShell", "RSAT-ADLDS")
+		Ensure = "Present"
+		IncludeAllSubFeature = $True
+	}
+
+	File RobotHomeDir {
+        Type = 'Directory'
+        DestinationPath = 'C:\RobotHome'
+        Ensure = "Present"
+    }
+
+	xSmbShare RobotHomeDirShare
+	{
+		Ensure = "Present"
+		Name   = "RobotHome"
+		Path = "C:\RobotHome" 
+		FullAccess = $AdminCreds.UserName
+		Description = "Workspace Robot home folder"
+		DependsOn = "[File]RobotHomeDir"
+	}
+
+	File TSHomeDir {
+        Type = 'Directory'
+        DestinationPath = 'C:\RobotTS'
+        Ensure = "Present"
+    }
+
+	xSmbShare TSHomeDirShare
+	{
+		Ensure = "Present"
+		Name   = "RobotTS"
+		Path = "C:\RobotTS" 
+		FullAccess = $AdminCreds.UserName
+		Description = "Workspace Robot TS folder"
+		DependsOn = "[File]TSHomeDir"
 	}
 }
 
@@ -158,6 +175,70 @@ Configuration AddRootCA
     }
 }
 
+Configuration ReplaceJsonFile
+{
+	param(
+		[string] $WsJsonUri,
+		[PSCredential] $AdminCreds,
+		[String] $IdpUrl,
+		[string] $BinariesVersion
+	)
+
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, FileContentDSC
+
+	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
+	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
+
+	xRemoteFile ConfigJson {
+		Uri = $WsJsonUri
+		DestinationPath = $wsjson
+	}
+	
+	ReplaceText replaceFQDN {
+		Path   = $wsjson
+        Search = '%IdpUrl%'
+        Type   = 'Text'
+        Text   = $IdpUrl
+		DependsOn = "[xRemoteFile]ConfigJson"
+	}
+
+	ReplaceText replacePassword {
+		Path   = $wsjson
+        Search = '%password%'
+        Type   = 'Text'
+        Text   = $AdminCreds.GetNetworkCredential().Password
+		DependsOn = "[ReplaceText]replaceFQDN"
+	}
+
+	ReplaceText replaceUser {
+		Path   = $wsjson
+        Search = '%user%'
+        Type   = 'Text'
+        Text   = $AdminCreds.UserName.Split('@')[0]
+		DependsOn = "[ReplaceText]replacePassword"
+	}
+		
+	ReplaceText replaceHostname {
+		Path   = $wsjson
+        Search = '%hostname%'
+        Type   = 'Text'
+        Text   = $env:COMPUTERNAME
+		DependsOn = "[ReplaceText]replaceUser"
+	}
+
+	xRemoteFile Workspace {
+		Uri = "$BinariesLocation/Artifactory/Workspace-$BinariesVersion.zip$binariesLocationSasToken"
+		DestinationPath = $wsinstaller
+	}
+
+	Archive UnzipWorkspace {
+		Destination = $InstallFolder
+		Path = $wsinstaller
+		Force = $True
+		DependsOn = "[xRemoteFile]Workspace"
+	}
+}
+
 Configuration WSFront
 {
 	param(
@@ -168,23 +249,22 @@ Configuration WSFront
 		[Parameter(Mandatory)]
 		[string] $binariesLocationSasToken,
 		[Parameter(Mandatory)]
-		[string] $user,
+		[string] $IdpUrl,
 		[Parameter(Mandatory)]
-		[string] $pwd,
-		[string] $wsFqdn,
-		[string] $SplitPortalAndProvisioning,
+		[string] $BinariesVersion,
 		[Parameter(Mandatory)]
-		[string] $BinariesVersion
+		[PSCredential] $AdminCreds,
+		[string] $SplitPortalAndProvisioning
+
 	)
 
-	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco, xCertificate, FileContentDSC
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco, xCertificate
 	if ($SplitPortalAndProvisioning -eq "No") {
 		$configFile = "Compact"
 	}
 	$configArtifact = "$artifactsLocation/wsfront/WSMISettings$configFile.json$artifactsLocationSasToken"
-	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
+	
 	$iisCert = Join-Path -Path $InstallFolder -ChildPath "ws.local.pfx"
-	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
 	$citrixStorefrontExe = "CitrixStoreFront-x64.exe"
 	$citrixStoreFrontPath = Join-Path -Path $InstallFolder -ChildPath $citrixStorefrontExe
 
@@ -194,46 +274,11 @@ Configuration WSFront
 			RebootNodeIfNeeded = $true
 		}
 
-		xRemoteFile ConfigJson {
-			Uri = $configArtifact
-			DestinationPath = $wsjson
-		}
-
-		ReplaceText replaceFQDN {
-			Path   = $wsjson
-            Search = '%fqdn%'
-            Type   = 'Text'
-            Text   = $wsFqdn
-			DependsOn = "[xRemoteFile]ConfigJson"
-		}
-
-		ReplaceText replacePassword {
-			Path   = $wsjson
-            Search = '%password%'
-            Type   = 'Text'
-            Text   = $pwd
-			DependsOn = "[ReplaceText]replaceFQDN"
-		}
-
-		ReplaceText replaceUser {
-			Path   = $wsjson
-            Search = '%user%'
-            Type   = 'Text'
-            Text   = $user
-			DependsOn = "[ReplaceText]replacePassword"
-		}
-		
-		ReplaceText replaceHostname {
-			Path   = $wsjson
-            Search = '%hostname%'
-            Type   = 'Text'
-            Text   = $env:COMPUTERNAME
-			DependsOn = "[ReplaceText]replaceUser"
-		}
-
-		xRemoteFile Workspace {
-			Uri = "$BinariesLocation/Artifactory/Workspace-$BinariesVersion.zip$binariesLocationSasToken"
-			DestinationPath = $wsinstaller
+		ReplaceJsonFile ReplaceConfiguration {
+			WsJsonUri = $configArtifact
+			AdminCreds = $AdminCreds
+			IdpUrl = $IdpUrl
+			BinariesVersion = $BinariesVersion
 		}
 
 		xRemoteFile CitrixStorefront {
@@ -241,27 +286,22 @@ Configuration WSFront
 			DestinationPath = $citrixStoreFrontPath
 		}
 
-		Archive UnzipWorkspace {
-			Destination = $InstallFolder
-			Path = $wsinstaller
-			Force = $True
-			DependsOn = "[xRemoteFile]Workspace"
-		}
-
 		AddRootCa NestedRootCA {
 			artifactsLocation = $artifactsLocation
 			artifactsLocationSasToken = $artifactsLocationSasToken
 		}
 
-		WindowsFeatureSet  WorkspaceDependencies {
-			Name = @("Web-Server", "Web-Basic-Auth", "Web-Http-Redirect", "Web-Windows-Auth", "Web-App-Dev", "Web-Net-Ext45", "Web-AppInit", "Web-Asp-Net45", "Web-Mgmt-Tools", "Web-Scripting-Tools", "NET-Framework-45-Features", "NET-Framework-Features", "NET-Framework-45-Core", "Web-WebSockets")
-			Ensure = "Present"
-			IncludeAllSubFeature = $True
+		if ($SplitPortalAndProvisioning -eq "No") {
+			PortalBackend RobotDependencies {
+				AdminCreds = $AdminCreds
+			}
 		}
 
-		Common NestedCommon {}
+		Common NestedCommon {
+			AdminCreds = $AdminCreds
+		}
 
-		FrontEnd NestedFrontend {}
+		PortalFrontEnd FrontendDependencies {}
 
 		DevTools NestedDevTools {}
 
@@ -294,6 +334,7 @@ Configuration WSFront
 			DependsOn  = '[xRemoteFile]IISCertFile'
 		}
 
+		# Required to make nodejs path be in environment vars
 		Script ForceReboot
 		{
 			TestScript = {
@@ -305,10 +346,9 @@ Configuration WSFront
 
 			}
 			GetScript = { return @{result = 'result'}}
-			DependsOn = @("[WindowsFeatureSet]WorkspaceDependencies", "[cChocoPackageInstaller]nodejs")
+			DependsOn = @("[PortalFrontEnd]FrontendDependencies", "[cChocoPackageInstaller]nodejs")
 		}    
 		
-		<#
 		Script InstallCitrixStoreFront
 		{
 			SetScript = 
@@ -317,14 +357,11 @@ Configuration WSFront
 
 				$env:SEE_MASK_NOZONECHECKS = 1
 
-				$using:citrixStoreFrontPath | Out-File "c:\install\citrixpath.log"
-
 				$res = Start-Process -FilePath $using:citrixStoreFrontPath -ArgumentList '-silent' -Wait -PassThru
-
 				$res | select * | Out-File "C:\install\citrixinstall.log"
 
 				if($res.ExitCode -gt 0) {
-					throw "Error installing Citrix Storefront"
+					throw "Error installing Citrix Storefront, exit code $($res.ExitCode)."
 				}
 			}
 			TestScript = 
@@ -339,25 +376,23 @@ Configuration WSFront
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = @("[xRemoteFile]CitrixStorefront", "[WindowsFeatureSet]WorkspaceDependencies")
+			DependsOn = @("[xRemoteFile]CitrixStorefront", "[PortalFrontEnd]FrontendDependencies")
+			PsDscRunAsCredential = $AdminCreds
 		}
 
-		$wsInstallerExe = Join-Path -Path $InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
-		
 		Script InstallWorkspaces
 		{
 			SetScript = 
 			{
 				Set-Location -Path $using:InstallFolder
+				$wsInstallerExe = Join-Path -Path $using:InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
 
-				$res = Start-Process -FilePath $using:wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
+				$res = Start-Process -FilePath $wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
 
 				$res | select * | Out-File "C:\install\wsinstall.log"
 
-				pwd | select Path | Out-File "c:\install\wsdir.log"
-
 				if($res.ExitCode -gt 0) {
-					throw "Error installing Citrix Storefront"
+					throw "Error installing Workspaces, exit code $($res.ExitCode)."
 				}
 			}
 			TestScript = 
@@ -376,9 +411,9 @@ Configuration WSFront
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = @("[Archive]UnzipWorkspace", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs", "[ReplaceText]replaceUser")
+			DependsOn = @("[ReplaceJsonFile]ReplaceConfiguration", "[Script]InstallCitrixStoreFront", "[cChocoPackageInstaller]nodejs")
+			PsDscRunAsCredential = $AdminCreds
 		}
-		#>
 	}
 }
 
@@ -392,17 +427,12 @@ Configuration WSBack
 		[Parameter(Mandatory)]
 		[string] $binariesLocationSasToken,
 		[Parameter(Mandatory)]
-		[string] $user,
+		[string] $BinariesVersion,
 		[Parameter(Mandatory)]
-		[string] $pwd,
-		[Parameter(Mandatory)]
-		[string] $BinariesVersion
+		[PSCredential] $AdminCreds
 	)
 
-	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, FileContentDSC
-
-	$wsinstaller = Join-Path -Path $InstallFolder -ChildPath "Workspace-$BinariesVersion.zip"
-	$wsjson = Join-Path -Path $InstallFolder -ChildPath "WSMISettings.json"
+	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration
 
 	Node localhost
 	{
@@ -410,43 +440,10 @@ Configuration WSBack
 			RebootNodeIfNeeded = $true
 		}
 
-		xRemoteFile ConfigJson {
-			Uri = "$artifactsLocation/wsback/WSMISettings.json$artifactsLocationSasToken"
-			DestinationPath = $wsjson
-		}
-
-		ReplaceText replacePassword {
-			Path   = $wsjson
-            Search = '%password%'
-            Type   = 'Text'
-            Text   = $pwd
-			DependsOn = "[xRemoteFile]ConfigJson"
-		}
-
-		ReplaceText replaceUser {
-			Path   = $wsjson
-            Search = '%user%'
-            Type   = 'Text'
-            Text   = $user
-			DependsOn = "[ReplaceText]replacePassword"
-		}
-
-		WindowsFeatureSet  WorkspaceDependencies {
-			Name = @("NET-Framework-Features", "NET-Framework-45-Core")
-			Ensure = "Present"
-			IncludeAllSubFeature = $True
-		}
-
-		xRemoteFile Workspace {
-			Uri = "$BinariesLocation/Artifactory/Workspace-$BinariesVersion.zip$binariesLocationSasToken"
-			DestinationPath = $wsinstaller
-		}
-
-		Archive UnzipWorkspace {
-			Destination = $InstallFolder
-			Path = $wsinstaller
-			Force = $True
-			DependsOn = "[xRemoteFile]Workspace"
+		ReplaceJsonFile ReplaceConfiguration {
+			WsJsonUri = "$artifactsLocation/wsback/WSMISettings.json$artifactsLocationSasToken"
+			AdminCreds = $AdminCreds
+			BinariesVersion = $BinariesVersion
 		}
 
 		AddRootCa NestedRootCA {
@@ -454,20 +451,23 @@ Configuration WSBack
 			artifactsLocationSasToken = $artifactsLocationSasToken
 		}
 
-		$wsInstallerExe = Join-Path -Path $InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
+		PortalBackend RobotDependencies {
+			AdminCreds = $AdminCreds
+		}
 
 		Script InstallWorkspaces
 		{
 			SetScript = 
 			{
 				Set-Location -Path $using:InstallFolder
+				$wsInstallerExe = Join-Path -Path $using:InstallFolder -ChildPath "ws10.Workspace.Setup.exe"
 
-				$res = Start-Process -FilePath $using:wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
+				$res = Start-Process -FilePath $wsInstallerExe -ArgumentList "/silentmode" -Wait -NoNewWindow -PassThru
 
 				$res | select * | Out-File "C:\install\wsinstall.log"
 
 				if($res.ExitCode -gt 0) {
-					throw "Error installing Workspaces"
+					throw "Error installing Workspaces, exit code $($res.ExitCode)."
 				}
 			}
 			TestScript = 
@@ -486,12 +486,16 @@ Configuration WSBack
 
 				return @{ Result = "$version" }
 			}
-			DependsOn = @("[Archive]UnzipWorkspace", "[WindowsFeatureSet]WorkspaceDependencies", "[ReplaceText]replaceUser")
+			DependsOn = @("[ReplaceJsonFile]ReplaceConfiguration", "[PortalBackend]RobotDependencies")
+			PsDscRunAsCredential = $AdminCreds
+
 		}
 
 		# TODO If multiple front reference all QE in backend
 
-		Common NestedCommon {}
+		Common NestedCommon {
+			AdminCreds = $AdminCreds
+		}
 
 		DevTools NestedDevTools {}
 	}
@@ -508,6 +512,8 @@ Configuration WSSQL
 		[string] $TcpPort,
 		[Parameter(Mandatory)]
 		[PSCredential] $SqlCredential,
+		[Parameter(Mandatory)]
+		[PSCredential] $AdminCreds,
 		[string] $SQLServerSKU
 	)
 	Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, xSqlServer
@@ -523,7 +529,6 @@ Configuration WSSQL
 		$instanceName = "MSSQLSERVER"
 	}
 
-	#SQLExpress
 	Node localhost
 	{
 		xSQLServerNetwork ChangeTcpIpOnDefaultInstance
@@ -535,9 +540,8 @@ Configuration WSSQL
 			TcpPort = $TcpPort
 			RestartService = $true
 		}
-
 		
-		xRemoteFile GetSqlScript{
+		<#xRemoteFile GetSqlScript{
 			Uri = "$artifactsLocation/SQL/Get-Workspace.sql$artifactsLocationSasToken"
 			DestinationPath = $getScript
 			DependsOn = "[xSQLServerNetwork]ChangeTcpIpOnDefaultInstance"
@@ -564,9 +568,11 @@ Configuration WSSQL
             GetFilePath    = $getScript
             Variable       = @("FilePath=C:\temp\log\AuditFiles")
 			DependsOn = "[xRemoteFile]TestSqlScript"
-        }
+        }#>
 
-		Common NestedCommon {}
+		Common NestedCommon {
+			AdminCreds = $AdminCreds
+		}
 	}
 }
 
@@ -607,7 +613,9 @@ Configuration WSLBack
 			artifactsLocationSasToken = $artifactsLocationSasToken
 		}
 
-		Common NestedCommon {}
+		#Common NestedCommon {
+		#	AdminCreds = $AdminCreds
+		#}
 
 		DevTools NestedDevTools {}
 	}
@@ -634,7 +642,9 @@ Configuration WSLFront
 			IncludeAllSubFeature = $True
 		}
 
-		Common NestedCommon {}
+		#Common NestedCommon {
+		#	AdminCreds = $AdminCreds
+		#}
 
 		AddRootCa NestedRootCA {
 			artifactsLocation = $artifactsLocation
@@ -759,7 +769,7 @@ Configuration WSLFront
 		Import-DscResource -ModuleName PSDesiredStateConfiguration, xPSDesiredStateConfiguration, cChoco
 
 		Node localhost {
-			Common NestedCommon {}
+			#Common NestedCommon {}
 
 			DevTools NestedDevTools {}
 

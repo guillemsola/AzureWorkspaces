@@ -93,7 +93,7 @@
     "NumberOfInstances": {
       "type": "int",
       "metadata": {
-        "description": "Number of WS Portal instances"
+        "description": "Number of WS Portal instances."
       },
       "defaultvalue": 1
     },
@@ -109,7 +109,7 @@
       "type": "string",
       "allowedValues": [ "Express", "SQLDEV" ],
       "metadata": {
-        "description": "Type of SQL Server SKU to deploy"
+        "description": "Type of SQL Server SKU to deploy."
       },
       "defaultvalue": "SQLDEV"
     },
@@ -117,23 +117,31 @@
       "type": "string",
       "allowedValues": [ "Enabled", "Disabled" ],
       "metadata": {
-        "description": "Auto shutdown portal machine."
+        "description": "Auto shutdown feature for virtual machines."
       },
       "defaultvalue": "Enabled"
     },
     "AutoShutdownTime": {
       "type": "string",
       "metadata": {
-        "description": "Time to shutdown machine"
+        "description": "Time to shutdown a virtual machine."
       },
       "defaultvalue": "1900"
     },
     "AutoShutdownTimeZone": {
       "type": "string",
       "metadata": {
-        "description": "Time zone id https://msdn.microsoft.com/en-us/library/gg154758.aspx."
+        "description": "Time zone id https://msdn.microsoft.com/en-us/library/gg154758.aspx to use for auto shutdown feature."
       },
       "defaultvalue": "Romance Standard Time"
+    },
+    "WindowsSKU": {
+      "type": "string",
+      "allowedValues": [ "2016-Datacenter", "2016-Datacenter-smalldisk", "2012-R2-Datacenter", "2012-R2-Datacenter-smalldisk", "2016-Datacenter-Server-Core" ],
+      "metadata": {
+        "description": "Windows SKU to use for deployment."
+      },
+      "defaultvalue": "2016-Datacenter"
     }
   },
   "variables": {
@@ -177,7 +185,7 @@
     "rServicesEnabled": "false",
     "OuPath": "OU=Servers,DC=ws,DC=local",
     "DCVMSize": "[parameters('InfraVMSize')]",
-    "SQLVMSize": "[parameters('InfraVMSize')]",
+    "SQLVMSize": "[parameters('WSVMSize')]",
     "RabbitVMSize": "[parameters('InfraVMSize')]"
   },
   "resources": [
@@ -382,7 +390,7 @@
           "imageReference": {
             "publisher": "MicrosoftWindowsServer",
             "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
+            "sku": "[parameters('WindowsSKU')]",
             "version": "latest"
           },
           "osDisk": {
@@ -440,6 +448,10 @@
                 "AdminCreds": {
                   "UserName": "[parameters('adminUsername')]",
                   "Password": "[parameters('adminPassword')]"
+                },
+                "DomainAdminCreds": {
+                  "userName": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+                  "password": "[parameters('adminPassword')]"
                 }
               }
             }
@@ -581,7 +593,7 @@
           "imageReference": {
             "publisher": "MicrosoftWindowsServer",
             "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
+            "sku": "[parameters('WindowsSKU')]",
             "version": "latest"
           },
           "osDisk": {
@@ -653,9 +665,7 @@
               },
               "configurationArguments": {
                 "artifactsLocation": "[parameters('_artifactsLocation')]",
-                "user": "[parameters('adminUsername')]",
-                "pwd": "[parameters('adminPassword')]",
-                "wsFqdn": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn]",
+                "IdpUrl": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('WSPpublicIPAddressName')),'2016-03-30').dnsSettings.fqdn]",
                 "SplitPortalAndProvisioning": "[parameters('SplitPortalAndProvisioning')]",
                 "BinariesVersion": "[parameters('BinariesVersion')]"
               }
@@ -663,6 +673,10 @@
             "protectedSettings": {
               "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
               "configurationArguments": {
+                "AdminCreds": {
+                  "userName": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+                  "password": "[parameters('adminPassword')]"
+                },
                 "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
                 "binariesLocationSasToken": "[parameters('_binariesLocationSasToken')]"
               }
@@ -700,34 +714,34 @@
         }
       }
     },
-    {
-      "apiVersion": "2015-06-15",
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "name": "[concat(variables('WSFrontVMName'), '-', copyIndex(), '/InstallWS')]",
-      "location": "[resourceGroup().location]",
-      "copy": {
-        "name": "WSFrontiNSTALLLoop",
-        "count": "[parameters('NumberOfInstances')]"
-      },
-      "dependsOn": [
-        "[concat('DSCConfiguration', '-', copyIndex())]"
-      ],
-      "tags": {
-        "displayName": "Install WS Front"
-      },
-      "properties": {
-        "publisher": "Microsoft.Compute",
-        "type": "CustomScriptExtension",
-        "typeHandlerVersion": "1.9",
-        "autoUpgradeMinorVersion": true,
-        "settings": {
-          "fileUris": [
-            "[concat(parameters('_artifactsLocation'), '/wsfront/Install.ps1', parameters('_artifactsLocationSasToken'))]"
-          ],
-          "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File install.ps1"
-        }
-      }
-    },
+    //{
+    //  "apiVersion": "2015-06-15",
+    //  "type": "Microsoft.Compute/virtualMachines/extensions",
+    //  "name": "[concat(variables('WSFrontVMName'), '-', copyIndex(), '/InstallWS')]",
+    //  "location": "[resourceGroup().location]",
+    //  "copy": {
+    //    "name": "WSFrontiNSTALLLoop",
+    //    "count": "[parameters('NumberOfInstances')]"
+    //  },
+    //  "dependsOn": [
+    //    "[concat('DSCConfiguration', '-', copyIndex())]"
+    //  ],
+    //  "tags": {
+    //    "displayName": "Install WS Front"
+    //  },
+    //  "properties": {
+    //    "publisher": "Microsoft.Compute",
+    //    "type": "CustomScriptExtension",
+    //    "typeHandlerVersion": "1.9",
+    //    "autoUpgradeMinorVersion": true,
+    //    "settings": {
+    //      "fileUris": [
+    //        "[concat(parameters('_artifactsLocation'), '/wsfront/Install.ps1', parameters('_artifactsLocationSasToken'))]"
+    //      ],
+    //      "commandToExecute": "powershell -NonInteractive -ExecutionPolicy bypass -File install.ps1"
+    //    }
+    //  }
+    //},
     {
       "apiVersion": "2015-06-15",
       "type": "Microsoft.Network/networkInterfaces",
@@ -787,7 +801,7 @@
           "imageReference": {
             "publisher": "MicrosoftWindowsServer",
             "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
+            "sku": "[parameters('WindowsSKU')]",
             "version": "latest"
           },
           "osDisk": {
@@ -862,14 +876,16 @@
               },
               "configurationArguments": {
                 "artifactsLocation": "[parameters('_artifactsLocation')]",
-                "user": "[parameters('adminUsername')]",
-                "pwd": "[parameters('adminPassword')]",
                 "BinariesVersion": "[parameters('BinariesVersion')]"
               }
             },
             "protectedSettings": {
               "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]",
               "configurationArguments": {
+                "AdminCreds": {
+                  "userName": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+                  "password": "[parameters('adminPassword')]"
+                },
                 "artifactsLocationSasToken": "[parameters('_artifactsLocationSasToken')]",
                 "binariesLocationSasToken": "[parameters('_binariesLocationSasToken')]"
               }
@@ -1052,6 +1068,10 @@
                 "SqlCredential": {
                   "UserName": "[parameters('adminUsername')]",
                   "Password": "[parameters('adminPassword')]"
+                },
+                "AdminCreds": {
+                  "userName": "[concat(parameters('adminUsername'), '@', parameters('domainName'))]",
+                  "password": "[parameters('adminPassword')]"
                 }
               }
             }
@@ -1068,7 +1088,7 @@
         "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'), '/extensions/joindomain')]"
       ],
       "tags": {
-        "displayName": "SqlServer Extension"
+        "displayName": "SQL IaaS Extension"
       },
       "properties": {
         "type": "SqlIaaSAgent",
@@ -1112,6 +1132,31 @@
         "protectedSettings": {
           "SQLAuthUpdateUserName": "[parameters('adminUsername')]",
           "SQLAuthUpdatePassword": "[parameters('adminPassword')]"
+        }
+      }
+    },
+    {
+      "name": "[concat('shutdown-computevm-', variables('SQLVMName'))]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2016-05-15",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "SQL AutoShutdown"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Compute/virtualMachines/', variables('SQLVMName'))]"
+      ],
+      "properties": {
+        "status": "[parameters('AutoShutdownStatus')]",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[parameters('AutoShutdownTime')]"
+        },
+        "timeZoneId": "[parameters('AutoShutdownTimeZone')]",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('SQLVMName'))]",
+        "notificationSettings": {
+          "status": "Disabled",
+          "timeInMinutes": 30
         }
       }
     },
@@ -1244,7 +1289,15 @@
           "adminUsername": "[parameters('adminUsername')]",
           "adminPassword": "[parameters('adminPassword')]",
           "linuxConfiguration": {
-            "disablePasswordAuthentication": false
+            "disablePasswordAuthentication": false,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+                  "keyData": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCr3uENV/KuFL6oNgV0iyo0o/qqjiT/PBD8F2PcuxTEj4DUsT82TyLl5BHn9SGbm11h+aojEvxDD3a0eLnd5n0YIrqM/+/MqWTUnIja08qnG+nYjR2PdyOgc6YSWCD+UEWHhcQnTlyECtXvX97s7Fl7wLTRcDysCaqck2s7dutZCPmryS+H4FW1t3mHvevtqVPb4iLYWQDWN7djA6so7LCR9HpYjokoqoWunUq6886KvWT2VpGTxVav8SoqlNAVHqaXzIS6y/Swp8TUVUomm8Do23stBedhbAkHRlXT+1ilAO3uKhcEZjQmm0/6idF3sUePGL1R4h8VZlfAqCgx7z2v85/6wMmCUig86bMxFf3eJMI7rkyuIRvbkGF0ImKlCwFNC2xVVoL2gD/o24l5/aoNgSy8Zp3UvYKO/vBhAMcDEcogysT96iy3+ZG9CMCzFt2K8wwyciwIR1y012UVyzCA5VApn6bt0pqy0xlHH5WHtzT7lH2fOYUYtToFEEnpeiWcQZuhz5MFNDcm7jlj1G1pToKizuzCqlyPjdpz8r/hb0ANaJ3Q7R/KHifi42996Hzyr5HuPV5dNb6w6jEpMOXBa7bgaSshhuSfmX41BuijSfEtfXtQO6ZIKNmUdKl+ltjYTwq6HS2FnNVwCTUvSVUy8/Jz1LXiDBVFaG+bnH5kuw== guillem.sola@asg.com"
+                }
+              ]
+            }
           }
         },
         "storageProfile": {
